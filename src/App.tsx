@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import chassisImage from './assets/mod-desk-chassis.png'
 import './App.css'
 import {
@@ -6,51 +14,15 @@ import {
   DEFAULT_PATCH_CONNECTIONS,
   ModDeskSynthEngine,
   type EngineMode,
-  type ModDeskJackId,
-  type PatchConnection,
   type SynthParameters,
 } from './synthEngine'
 
-type JackDirection = 'in' | 'out'
-type ModuleId = 'osc' | 'filter' | 'env' | 'lfo' | 'dist' | 'delay' | 'reverb' | 'master'
-type Point = { x: number; y: number }
 type Rect = { left: number; top: number; width: number; height: number }
 
-type JackDefinition = {
-  id: ModDeskJackId
-  module: ModuleId
-  direction: JackDirection
-}
-
-type NumericParamKey = {
-  [K in keyof SynthParameters]: SynthParameters[K] extends number ? K : never
-}[keyof SynthParameters]
-
-type KnobSpec = {
+type HotKnobConfig = {
   id: string
   label: string
   rect: Rect
-  param: NumericParamKey
-  min: number
-  max: number
-  step: number
-  readout: (parameters: SynthParameters) => string
-}
-
-type EngineButtonSpec = {
-  engine: EngineMode
-  label: string
-  rect: Rect
-}
-
-type FilterTypeButtonSpec = {
-  type: BiquadFilterType
-  rect: Rect
-}
-
-type HotKnobProps = {
-  rect: Rect
-  label: string
   value: number
   min: number
   max: number
@@ -59,8 +31,62 @@ type HotKnobProps = {
   onChange: (value: number) => void
 }
 
+type HotKnobProps = HotKnobConfig
+
 const IMAGE_WIDTH = 1536
 const IMAGE_HEIGHT = 1024
+const WHITE_KEY_START_X = 417
+const WHITE_KEY_WIDTH = 590
+const BLACK_KEY_WIDTH = 26
+
+const ENGINE_ORDER: EngineMode[] = ['analog', 'fmBell', 'noise', 'pluck', 'bass', 'pad', 'perc', 'choir']
+const FILTER_TYPES: BiquadFilterType[] = ['lowpass', 'bandpass', 'highpass', 'notch']
+
+const WHITE_KEY_NOTES = [53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76]
+const BLACK_KEYS = [
+  { note: 54, centerX: 470 },
+  { note: 56, centerX: 514 },
+  { note: 58, centerX: 559 },
+  { note: 61, centerX: 627 },
+  { note: 63, centerX: 671 },
+  { note: 66, centerX: 742 },
+  { note: 68, centerX: 784 },
+  { note: 70, centerX: 828 },
+  { note: 73, centerX: 898 },
+  { note: 75, centerX: 940 },
+]
+
+const KEYBOARD_NOTE_MAP: Record<string, number> = {
+  z: 53,
+  s: 54,
+  x: 55,
+  d: 56,
+  c: 57,
+  f: 58,
+  v: 59,
+  b: 60,
+  h: 61,
+  n: 62,
+  j: 63,
+  m: 64,
+  ',': 65,
+  l: 66,
+  '.': 67,
+  ';': 68,
+  '/': 69,
+  q: 65,
+  '2': 66,
+  w: 67,
+  '3': 68,
+  e: 69,
+  r: 70,
+  '5': 71,
+  t: 72,
+  '6': 73,
+  y: 74,
+  '7': 75,
+  u: 76,
+}
 
 const pxRect = (x: number, y: number, width: number, height: number): Rect => ({
   left: (x / IMAGE_WIDTH) * 100,
@@ -69,6 +95,9 @@ const pxRect = (x: number, y: number, width: number, height: number): Rect => ({
   height: (height / IMAGE_HEIGHT) * 100,
 })
 
+const centerRect = (centerX: number, centerY: number, size: number): Rect =>
+  pxRect(centerX - size / 2, centerY - size / 2, size, size)
+
 const styleFromRect = (rect: Rect): CSSProperties => ({
   left: `${rect.left}%`,
   top: `${rect.top}%`,
@@ -76,417 +105,107 @@ const styleFromRect = (rect: Rect): CSSProperties => ({
   height: `${rect.height}%`,
 })
 
-const JACKS: JackDefinition[] = [
-  { id: 'osc.out', module: 'osc', direction: 'out' },
-  { id: 'osc.pitchCv', module: 'osc', direction: 'in' },
-  { id: 'filter.in', module: 'filter', direction: 'in' },
-  { id: 'filter.out', module: 'filter', direction: 'out' },
-  { id: 'filter.cutoffCv', module: 'filter', direction: 'in' },
-  { id: 'env.out', module: 'env', direction: 'out' },
-  { id: 'lfo.out', module: 'lfo', direction: 'out' },
-  { id: 'dist.in', module: 'dist', direction: 'in' },
-  { id: 'dist.out', module: 'dist', direction: 'out' },
-  { id: 'delay.in', module: 'delay', direction: 'in' },
-  { id: 'delay.out', module: 'delay', direction: 'out' },
-  { id: 'reverb.in', module: 'reverb', direction: 'in' },
-  { id: 'reverb.out', module: 'reverb', direction: 'out' },
-  { id: 'master.in', module: 'master', direction: 'in' },
-]
-
-const JACK_LOOKUP = Object.fromEntries(JACKS.map((jackDefinition) => [jackDefinition.id, jackDefinition])) as Record<
-  ModDeskJackId,
-  JackDefinition
->
-
-const JACK_LAYOUT: Record<ModDeskJackId, Rect> = {
-  'osc.out': pxRect(373, 276, 28, 28),
-  'osc.pitchCv': pxRect(373, 663, 28, 28),
-  'filter.in': pxRect(406, 276, 28, 28),
-  'filter.out': pxRect(751, 276, 28, 28),
-  'filter.cutoffCv': pxRect(750, 664, 28, 28),
-  'env.out': pxRect(1101, 276, 28, 28),
-  'lfo.out': pxRect(774, 276, 28, 28),
-  'dist.in': pxRect(1163, 874, 22, 22),
-  'dist.out': pxRect(1198, 874, 22, 22),
-  'delay.in': pxRect(1128, 276, 28, 28),
-  'delay.out': pxRect(1476, 276, 28, 28),
-  'reverb.in': pxRect(1286, 874, 22, 22),
-  'reverb.out': pxRect(1321, 874, 22, 22),
-  'master.in': pxRect(1383, 112, 20, 20),
-}
-
-const LCD_TOP_RECT = pxRect(1061, 82, 219, 60)
-const LCD_OSC_RECT = pxRect(82, 288, 228, 62)
-const LCD_FILTER_RECT = pxRect(486, 288, 208, 62)
-const LCD_ENV_RECT = pxRect(844, 288, 220, 62)
-const LCD_DELAY_RECT = pxRect(1196, 288, 212, 62)
-const KEYBED_RECT = pxRect(424, 840, 659, 144)
-
-const ENV_SLIDERS: Array<{ key: NumericParamKey; label: string; rect: Rect; min: number; max: number; step: number }> = [
-  { key: 'attack', label: 'A', rect: pxRect(836, 390, 26, 132), min: 0.003, max: 1.8, step: 0.001 },
-  { key: 'decay', label: 'D', rect: pxRect(911, 390, 26, 132), min: 0.01, max: 2.8, step: 0.001 },
-  { key: 'sustain', label: 'S', rect: pxRect(986, 390, 26, 132), min: 0, max: 1, step: 0.01 },
-  { key: 'release', label: 'R', rect: pxRect(1061, 390, 26, 132), min: 0.02, max: 3.6, step: 0.001 },
-]
-
-const KNOBS: KnobSpec[] = [
-  {
-    id: 'master',
-    label: 'MASTER',
-    rect: pxRect(1344, 74, 72, 72),
-    param: 'masterVolume',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.masterVolume * 100)}%`,
-  },
-  {
-    id: 'osc-detune',
-    label: 'DETUNE',
-    rect: pxRect(91, 375, 92, 92),
-    param: 'detuneCents',
-    min: -40,
-    max: 40,
-    step: 0.5,
-    readout: (parameters) => `${parameters.detuneCents.toFixed(1)}c`,
-  },
-  {
-    id: 'osc-mix',
-    label: 'MIX',
-    rect: pxRect(247, 417, 70, 70),
-    param: 'mix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.mix * 100)}%`,
-  },
-  {
-    id: 'osc-lfo-depth',
-    label: 'LFO DEPTH',
-    rect: pxRect(56, 554, 70, 70),
-    param: 'lfoDepth',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.lfoDepth * 100)}%`,
-  },
-  {
-    id: 'osc-reverb-mix',
-    label: 'REVERB MIX',
-    rect: pxRect(169, 554, 70, 70),
-    param: 'reverbMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.reverbMix * 100)}%`,
-  },
-  {
-    id: 'osc-dist-mix',
-    label: 'DIST MIX',
-    rect: pxRect(277, 554, 70, 70),
-    param: 'distMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.distMix * 100)}%`,
-  },
-  {
-    id: 'filter-cutoff',
-    label: 'CUTOFF',
-    rect: pxRect(485, 374, 94, 94),
-    param: 'filterCutoff',
-    min: 80,
-    max: 12000,
-    step: 1,
-    readout: (parameters) =>
-      parameters.filterCutoff >= 1000
-        ? `${(parameters.filterCutoff / 1000).toFixed(1)}kHz`
-        : `${Math.round(parameters.filterCutoff)}Hz`,
-  },
-  {
-    id: 'filter-res',
-    label: 'RES',
-    rect: pxRect(639, 417, 70, 70),
-    param: 'resonance',
-    min: 0.2,
-    max: 20,
-    step: 0.1,
-    readout: (parameters) => parameters.resonance.toFixed(1),
-  },
-  {
-    id: 'filter-drive',
-    label: 'DRIVE',
-    rect: pxRect(450, 554, 70, 70),
-    param: 'distDrive',
-    min: 1,
-    max: 32,
-    step: 0.1,
-    readout: (parameters) => parameters.distDrive.toFixed(1),
-  },
-  {
-    id: 'filter-delay-mix',
-    label: 'DLY MIX',
-    rect: pxRect(550, 554, 70, 70),
-    param: 'delayMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.delayMix * 100)}%`,
-  },
-  {
-    id: 'filter-reverb-decay',
-    label: 'REV DEC',
-    rect: pxRect(650, 554, 70, 70),
-    param: 'reverbDecay',
-    min: 0.4,
-    max: 6.5,
-    step: 0.05,
-    readout: (parameters) => `${parameters.reverbDecay.toFixed(1)}s`,
-  },
-  {
-    id: 'delay-time',
-    label: 'TIME',
-    rect: pxRect(1188, 374, 96, 96),
-    param: 'delayTime',
-    min: 0.02,
-    max: 0.9,
-    step: 0.001,
-    readout: (parameters) => `${Math.round(parameters.delayTime * 1000)}ms`,
-  },
-  {
-    id: 'delay-feedback',
-    label: 'FEEDBACK',
-    rect: pxRect(1348, 374, 96, 96),
-    param: 'delayFeedback',
-    min: 0,
-    max: 0.92,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.delayFeedback * 100)}%`,
-  },
-  {
-    id: 'delay-mix',
-    label: 'MIX',
-    rect: pxRect(1188, 554, 72, 72),
-    param: 'delayMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.delayMix * 100)}%`,
-  },
-  {
-    id: 'delay-tone',
-    label: 'REVERB',
-    rect: pxRect(1319, 554, 72, 72),
-    param: 'reverbDecay',
-    min: 0.4,
-    max: 6.5,
-    step: 0.05,
-    readout: (parameters) => `${parameters.reverbDecay.toFixed(1)}s`,
-  },
-  {
-    id: 'delay-mod',
-    label: 'LFO RATE',
-    rect: pxRect(1423, 554, 72, 72),
-    param: 'lfoRate',
-    min: 0.05,
-    max: 14,
-    step: 0.01,
-    readout: (parameters) => `${parameters.lfoRate.toFixed(1)}Hz`,
-  },
-  {
-    id: 'macro-cutoff',
-    label: 'MACRO CUTOFF',
-    rect: pxRect(1140, 883, 72, 72),
-    param: 'filterCutoff',
-    min: 80,
-    max: 12000,
-    step: 1,
-    readout: (parameters) => `${Math.round(parameters.filterCutoff)}Hz`,
-  },
-  {
-    id: 'macro-delay',
-    label: 'MACRO DELAY',
-    rect: pxRect(1233, 883, 72, 72),
-    param: 'delayMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.delayMix * 100)}%`,
-  },
-  {
-    id: 'macro-reverb',
-    label: 'MACRO REV',
-    rect: pxRect(1325, 883, 72, 72),
-    param: 'reverbMix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.reverbMix * 100)}%`,
-  },
-  {
-    id: 'macro-lfo',
-    label: 'MACRO LFO',
-    rect: pxRect(1418, 883, 72, 72),
-    param: 'lfoDepth',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.lfoDepth * 100)}%`,
-  },
-  {
-    id: 'scale',
-    label: 'SCALE',
-    rect: pxRect(217, 860, 72, 72),
-    param: 'mix',
-    min: 0,
-    max: 1,
-    step: 0.01,
-    readout: (parameters) => `${Math.round(parameters.mix * 100)}%`,
-  },
-  {
-    id: 'glide',
-    label: 'GLIDE',
-    rect: pxRect(305, 860, 72, 72),
-    param: 'release',
-    min: 0.02,
-    max: 3.6,
-    step: 0.001,
-    readout: (parameters) => `${Math.round(parameters.release * 1000)}ms`,
-  },
-]
-
-const ENGINE_BUTTONS: EngineButtonSpec[] = [
-  { engine: 'analog', label: 'ANLG', rect: pxRect(64, 663, 76, 52) },
-  { engine: 'fmBell', label: 'FM', rect: pxRect(157, 663, 76, 52) },
-  { engine: 'noise', label: 'NOISE', rect: pxRect(249, 663, 76, 52) },
-  { engine: 'pluck', label: 'PLUCK', rect: pxRect(340, 663, 76, 52) },
-  { engine: 'bass', label: 'BASS', rect: pxRect(470, 663, 76, 52) },
-  { engine: 'pad', label: 'PAD', rect: pxRect(562, 663, 76, 52) },
-  { engine: 'perc', label: 'PERC', rect: pxRect(654, 663, 76, 52) },
-  { engine: 'choir', label: 'CHOIR', rect: pxRect(1009, 658, 64, 62) },
-]
-
-const FILTER_TYPE_BUTTONS: FilterTypeButtonSpec[] = [
-  { type: 'lowpass', rect: pxRect(477, 323, 52, 20) },
-  { type: 'bandpass', rect: pxRect(531, 323, 52, 20) },
-  { type: 'highpass', rect: pxRect(585, 323, 52, 20) },
-  { type: 'notch', rect: pxRect(639, 323, 52, 20) },
-]
-
-const TRANSPORT_BUTTONS = {
-  power: pxRect(652, 95, 40, 40),
-  panic: pxRect(746, 95, 40, 40),
-  factoryPatch: pxRect(841, 95, 40, 40),
-  clearPatch: pxRect(934, 95, 40, 40),
-  hold: pxRect(1045, 864, 40, 38),
-  arp: pxRect(1045, 926, 40, 38),
-}
-
-const ALLOWED_CONNECTIONS: Array<[ModDeskJackId, ModDeskJackId]> = [
-  ['osc.out', 'filter.in'],
-  ['osc.out', 'dist.in'],
-  ['osc.out', 'delay.in'],
-  ['osc.out', 'master.in'],
-  ['filter.out', 'dist.in'],
-  ['filter.out', 'delay.in'],
-  ['filter.out', 'reverb.in'],
-  ['filter.out', 'master.in'],
-  ['dist.out', 'delay.in'],
-  ['dist.out', 'reverb.in'],
-  ['dist.out', 'master.in'],
-  ['delay.out', 'reverb.in'],
-  ['delay.out', 'master.in'],
-  ['reverb.out', 'master.in'],
-  ['env.out', 'filter.cutoffCv'],
-  ['env.out', 'osc.pitchCv'],
-  ['lfo.out', 'filter.cutoffCv'],
-  ['lfo.out', 'osc.pitchCv'],
-]
-
-const MODULE_COLORS: Record<ModuleId, string> = {
-  osc: '#ff8e36',
-  filter: '#39bbb6',
-  env: '#f5c93f',
-  lfo: '#72ba67',
-  dist: '#c79cff',
-  delay: '#de5c4f',
-  reverb: '#6f9bd8',
-  master: '#d9d6cf',
-}
-
-const WHITE_NOTES = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71]
-const BLACK_OFFSETS = new Set([1, 3, 6, 8, 10])
-
-const KEYBOARD_NOTE_MAP: Record<string, number> = {
-  z: 48,
-  s: 49,
-  x: 50,
-  d: 51,
-  c: 52,
-  v: 53,
-  g: 54,
-  b: 55,
-  h: 56,
-  n: 57,
-  j: 58,
-  m: 59,
-  ',': 60,
-  l: 61,
-  '.': 62,
-  ';': 63,
-  '/': 64,
-  q: 60,
-  '2': 61,
-  w: 62,
-  '3': 63,
-  e: 64,
-  r: 65,
-  '5': 66,
-  t: 67,
-  '6': 68,
-  y: 69,
-  '7': 70,
-  u: 71,
+const RECTS = {
+  topLcd: pxRect(1049, 93, 223, 72),
+  oscLcd: pxRect(95, 286, 229, 71),
+  filterLcd: pxRect(475, 285, 218, 72),
+  envLcd: pxRect(837, 285, 213, 75),
+  delayLcd: pxRect(1185, 284, 228, 86),
+  keybed: pxRect(417, 800, 590, 175),
+  transportPlay: centerRect(670, 125, 44),
+  transportStop: centerRect(764, 125, 44),
+  transportRandom: centerRect(860, 125, 44),
+  transportSave: centerRect(954, 125, 44),
+  hold: pxRect(1038, 842, 30, 29),
+  arp: pxRect(1038, 921, 30, 28),
+  oscFrequency: pxRect(105, 395, 96, 106),
+  oscFine: pxRect(268, 427, 54, 63),
+  oscPulseWidth: pxRect(83, 556, 52, 60),
+  oscSub: pxRect(195, 556, 51, 60),
+  oscLevel: pxRect(299, 556, 52, 60),
+  oscWaveButton: pxRect(81, 649, 55, 48),
+  oscSyncButton: pxRect(159, 648, 53, 49),
+  oscOctDownButton: pxRect(231, 649, 53, 48),
+  oscOctUpButton: pxRect(302, 649, 52, 48),
+  filterCutoff: pxRect(477, 395, 96, 114),
+  filterResonance: pxRect(642, 426, 55, 71),
+  filterDrive: pxRect(464, 556, 51, 64),
+  filterEnvAmt: pxRect(561, 556, 51, 64),
+  filterEnvTrack: pxRect(660, 556, 51, 65),
+  filterTypeButton: pxRect(463, 648, 59, 49),
+  filterSlopeButton: pxRect(553, 648, 61, 49),
+  filterCurveButton: pxRect(645, 648, 60, 49),
+  envAttackSlider: pxRect(813, 392, 36, 140),
+  envDecaySlider: pxRect(887, 392, 36, 140),
+  envSustainSlider: pxRect(961, 392, 36, 140),
+  envReleaseSlider: pxRect(1034, 392, 36, 140),
+  envVelocity: pxRect(832, 591, 49, 53),
+  envLoopButton: pxRect(717, 667, 82, 41),
+  delayTime: pxRect(1186, 410, 82, 97),
+  delayFeedback: pxRect(1341, 410, 80, 94),
+  delayMix: pxRect(1169, 556, 51, 63),
+  delayTone: pxRect(1273, 556, 52, 64),
+  delayMod: pxRect(1379, 556, 51, 64),
+  delaySyncButton: pxRect(1174, 648, 60, 49),
+  delayPingPongButton: pxRect(1268, 649, 63, 48),
+  delayDuckButton: pxRect(1365, 649, 61, 48),
+  scaleKnob: pxRect(241, 857, 47, 50),
+  glideKnob: pxRect(329, 857, 47, 49),
+  macro1: pxRect(1142, 875, 49, 53),
+  macro2: pxRect(1234, 875, 50, 53),
+  macro3: pxRect(1327, 876, 49, 52),
+  macro4: pxRect(1419, 876, 49, 52),
+  masterKnob: pxRect(1322, 99, 63, 63),
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value))
 
-const buildCablePath = (from: Point, to: Point): string => {
-  const curve = Math.max(36, Math.abs(to.x - from.x) * 0.45)
-  return `M ${from.x} ${from.y} C ${from.x + curve} ${from.y}, ${to.x - curve} ${to.y}, ${to.x} ${to.y}`
-}
+const quantize = (value: number, min: number, step: number): number =>
+  Math.round((value - min) / step) * step + min
+
+const randomBetween = (min: number, max: number): number => min + Math.random() * (max - min)
+
+const formatMilliseconds = (seconds: number): string => `${Math.round(seconds * 1000)}ms`
+
+const formatPercent = (value: number): string => `${Math.round(value * 100)}%`
+
+const formatCutoff = (value: number): string =>
+  value >= 1000 ? `${(value / 1000).toFixed(2)}kHz` : `${Math.round(value)}Hz`
 
 function HotKnob({ rect, label, value, min, max, step, readout, onChange }: HotKnobProps) {
+  const [isDragging, setIsDragging] = useState(false)
   const dragState = useRef<{ startY: number; startValue: number; pointerId: number } | null>(null)
-  const angle = -130 + ((value - min) / (max - min)) * 260
 
   const onPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
       dragState.current = {
         startY: event.clientY,
         startValue: value,
         pointerId: event.pointerId,
       }
+      setIsDragging(true)
       event.currentTarget.setPointerCapture(event.pointerId)
     },
     [value],
   )
 
   const onPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
       if (!dragState.current || dragState.current.pointerId !== event.pointerId) {
         return
       }
       const range = max - min
-      const delta = ((dragState.current.startY - event.clientY) / 140) * range
-      onChange(clamp(dragState.current.startValue + delta, min, max))
+      const delta = ((dragState.current.startY - event.clientY) / 160) * range
+      const nextValue = clamp(quantize(dragState.current.startValue + delta, min, step), min, max)
+      onChange(nextValue)
     },
-    [max, min, onChange],
+    [max, min, onChange, step],
   )
 
-  const clearDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+  const endDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
     if (dragState.current && dragState.current.pointerId === event.pointerId) {
       dragState.current = null
+      setIsDragging(false)
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
   }, [])
@@ -494,55 +213,54 @@ function HotKnob({ rect, label, value, min, max, step, readout, onChange }: HotK
   return (
     <button
       type="button"
-      className="hot-knob"
+      className={`hot-knob ${isDragging ? 'is-dragging' : ''}`}
       style={styleFromRect(rect)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={clearDrag}
-      onPointerCancel={clearDrag}
-      onPointerLeave={clearDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onPointerLeave={endDrag}
       aria-label={`${label} knob`}
-      data-readout={readout}
-      data-step={step}
     >
       <span className="hot-knob-ring" />
-      <span className="hot-knob-needle" style={{ transform: `rotate(${angle}deg)` }} />
-      <span className="hot-label">{label}</span>
-      <span className="hot-value">{readout}</span>
+      <span className="hot-knob-tooltip">
+        {label} {readout}
+      </span>
     </button>
   )
 }
 
 function App() {
   const synthRef = useRef<ModDeskSynthEngine | null>(null)
-  const chassisRef = useRef<HTMLDivElement | null>(null)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const jackRefs = useRef<Partial<Record<ModDeskJackId, HTMLButtonElement | null>>>({})
   const activeComputerKeysRef = useRef(new Set<string>())
+  const noteBindingRef = useRef(new Map<number, number>())
   const activeNotesRef = useRef(new Set<number>())
 
+  const [params, setParams] = useState<SynthParameters>({ ...DEFAULT_PARAMETERS })
   const [isAudioReady, setIsAudioReady] = useState(false)
+  const [statusText, setStatusText] = useState('Click PLAY to start audio.')
   const [holdEnabled, setHoldEnabled] = useState(false)
   const [arpEnabled, setArpEnabled] = useState(false)
-  const [params, setParams] = useState<SynthParameters>({ ...DEFAULT_PARAMETERS })
-  const [connections, setConnections] = useState<PatchConnection[]>([...DEFAULT_PATCH_CONNECTIONS])
-  const [selectedOutputJack, setSelectedOutputJack] = useState<ModDeskJackId | null>(null)
-  const [patchStatus, setPatchStatus] = useState('Tap a source jack, then a destination jack.')
+  const [syncEnabled, setSyncEnabled] = useState(false)
+  const [loopEnabled, setLoopEnabled] = useState(false)
+  const [delaySyncEnabled, setDelaySyncEnabled] = useState(false)
+  const [delayPingPongEnabled, setDelayPingPongEnabled] = useState(false)
+  const [delayDuckEnabled, setDelayDuckEnabled] = useState(false)
+  const [slope24Enabled, setSlope24Enabled] = useState(true)
+  const [curveEnabled, setCurveEnabled] = useState(false)
+  const [octaveShift, setOctaveShift] = useState(0)
+  const [velocityAmount, setVelocityAmount] = useState(0.9)
   const [activeNotes, setActiveNotes] = useState<number[]>([])
-  const [jackPoints, setJackPoints] = useState<Partial<Record<ModDeskJackId, Point>>>({})
-  const [ghostPoint, setGhostPoint] = useState<Point | null>(null)
 
-  const allowedConnections = useMemo(
-    () => new Set(ALLOWED_CONNECTIONS.map(([from, to]) => `${from}>${to}`)),
-    [],
-  )
+  useEffect(() => {
+    activeNotesRef.current = new Set(activeNotes)
+  }, [activeNotes])
 
   useEffect(() => {
     const synth = new ModDeskSynthEngine()
     synthRef.current = synth
     synth.updateParameters(params)
-    synth.setPatchConnections(connections)
-
+    synth.setPatchConnections(DEFAULT_PATCH_CONNECTIONS)
     return () => {
       synth.dispose()
       synthRef.current = null
@@ -553,14 +271,6 @@ function App() {
     synthRef.current?.updateParameters(params)
   }, [params])
 
-  useEffect(() => {
-    synthRef.current?.setPatchConnections(connections)
-  }, [connections])
-
-  useEffect(() => {
-    activeNotesRef.current = new Set(activeNotes)
-  }, [activeNotes])
-
   const ensureAudioStarted = useCallback(async () => {
     const synth = synthRef.current
     if (!synth) {
@@ -570,153 +280,102 @@ function App() {
     setIsAudioReady(synth.isReady())
   }, [])
 
-  const updateParameter = useCallback(
+  const setParameter = useCallback(
     <K extends keyof SynthParameters>(key: K, value: SynthParameters[K]) => {
-      setParams((previousParameters) => ({ ...previousParameters, [key]: value }))
+      setParams((previous) => ({ ...previous, [key]: value }))
     },
     [],
   )
 
-  const setNumericParameter = useCallback(
-    (key: NumericParamKey, value: number) => {
-      setParams((previousParameters) => ({ ...previousParameters, [key]: value }))
-    },
-    [],
-  )
-
-  const playNote = useCallback(
+  const playSynthNote = useCallback(
     async (note: number) => {
       if (!isAudioReady) {
         await ensureAudioStarted()
       }
-      synthRef.current?.noteOn(note)
-      setActiveNotes((currentNotes) => (currentNotes.includes(note) ? currentNotes : [...currentNotes, note]))
+      synthRef.current?.noteOn(note, velocityAmount)
+      setActiveNotes((previous) => (previous.includes(note) ? previous : [...previous, note]))
     },
-    [ensureAudioStarted, isAudioReady],
+    [ensureAudioStarted, isAudioReady, velocityAmount],
   )
 
-  const releaseNote = useCallback((note: number) => {
+  const releaseSynthNote = useCallback((note: number) => {
     synthRef.current?.noteOff(note)
-    setActiveNotes((currentNotes) => currentNotes.filter((activeNote) => activeNote !== note))
+    setActiveNotes((previous) => previous.filter((activeNote) => activeNote !== note))
   }, [])
 
-  const toggleHeldNote = useCallback(
-    async (note: number) => {
-      if (activeNotesRef.current.has(note)) {
-        releaseNote(note)
+  const mapToPlayedNote = useCallback((baseNote: number) => baseNote + octaveShift * 12, [octaveShift])
+
+  const playBaseNote = useCallback(
+    async (baseNote: number) => {
+      const playedNote = mapToPlayedNote(baseNote)
+      noteBindingRef.current.set(baseNote, playedNote)
+      await playSynthNote(playedNote)
+    },
+    [mapToPlayedNote, playSynthNote],
+  )
+
+  const releaseBaseNote = useCallback(
+    (baseNote: number) => {
+      const playedNote = noteBindingRef.current.get(baseNote) ?? mapToPlayedNote(baseNote)
+      noteBindingRef.current.delete(baseNote)
+      releaseSynthNote(playedNote)
+    },
+    [mapToPlayedNote, releaseSynthNote],
+  )
+
+  const toggleHeldBaseNote = useCallback(
+    async (baseNote: number) => {
+      const existing = noteBindingRef.current.get(baseNote)
+      if (existing !== undefined && activeNotesRef.current.has(existing)) {
+        noteBindingRef.current.delete(baseNote)
+        releaseSynthNote(existing)
         return
       }
-      await playNote(note)
-    },
-    [playNote, releaseNote],
-  )
 
-  const handleNotePress = useCallback(
-    (note: number) => {
-      if (holdEnabled) {
-        void toggleHeldNote(note)
-      } else {
-        void playNote(note)
-      }
+      const playedNote = mapToPlayedNote(baseNote)
+      noteBindingRef.current.set(baseNote, playedNote)
+      await playSynthNote(playedNote)
     },
-    [holdEnabled, playNote, toggleHeldNote],
-  )
-
-  const handleNoteRelease = useCallback(
-    (note: number) => {
-      if (!holdEnabled) {
-        releaseNote(note)
-      }
-    },
-    [holdEnabled, releaseNote],
+    [mapToPlayedNote, playSynthNote, releaseSynthNote],
   )
 
   const panic = useCallback(() => {
     synthRef.current?.allNotesOff()
-    activeComputerKeysRef.current.clear()
     setActiveNotes([])
+    activeComputerKeysRef.current.clear()
+    noteBindingRef.current.clear()
+    setStatusText('All notes off.')
   }, [])
-
-  const registerJackRef = useCallback((jackId: ModDeskJackId, node: HTMLButtonElement | null) => {
-    jackRefs.current[jackId] = node
-  }, [])
-
-  const measureJackPoints = useCallback(() => {
-    if (!chassisRef.current) {
-      return
-    }
-    const chassisRect = chassisRef.current.getBoundingClientRect()
-    const nextPoints: Partial<Record<ModDeskJackId, Point>> = {}
-    for (const jack of JACKS) {
-      const node = jackRefs.current[jack.id]
-      if (!node) {
-        continue
-      }
-      const rect = node.getBoundingClientRect()
-      nextPoints[jack.id] = {
-        x: rect.left - chassisRect.left + rect.width * 0.5,
-        y: rect.top - chassisRect.top + rect.height * 0.5,
-      }
-    }
-    setJackPoints(nextPoints)
-  }, [])
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(measureJackPoints)
-    const onResize = () => measureJackPoints()
-    const onScroll = () => measureJackPoints()
-    const resizeObserver = new ResizeObserver(() => measureJackPoints())
-
-    if (chassisRef.current) {
-      resizeObserver.observe(chassisRef.current)
-    }
-
-    window.addEventListener('resize', onResize)
-    scrollRef.current?.addEventListener('scroll', onScroll, { passive: true })
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', onResize)
-      scrollRef.current?.removeEventListener('scroll', onScroll)
-    }
-  }, [measureJackPoints])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (
-        target &&
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName.toUpperCase()) &&
-        !target.classList.contains('env-slider')
-      ) {
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName.toUpperCase())) {
         return
       }
-
       const key = event.key.toLowerCase()
-      const mappedNote = KEYBOARD_NOTE_MAP[key]
-      if (mappedNote === undefined || activeComputerKeysRef.current.has(key)) {
+      const baseNote = KEYBOARD_NOTE_MAP[key]
+      if (baseNote === undefined || activeComputerKeysRef.current.has(key)) {
         return
       }
-
       activeComputerKeysRef.current.add(key)
       event.preventDefault()
       if (holdEnabled) {
-        void toggleHeldNote(mappedNote)
+        void toggleHeldBaseNote(baseNote)
       } else {
-        void playNote(mappedNote)
+        void playBaseNote(baseNote)
       }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase()
-      const mappedNote = KEYBOARD_NOTE_MAP[key]
-      if (mappedNote === undefined) {
+      const baseNote = KEYBOARD_NOTE_MAP[key]
+      if (baseNote === undefined) {
         return
       }
       activeComputerKeysRef.current.delete(key)
       if (!holdEnabled) {
-        releaseNote(mappedNote)
+        releaseBaseNote(baseNote)
       }
     }
 
@@ -726,126 +385,62 @@ function App() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [holdEnabled, playNote, releaseNote, toggleHeldNote])
+  }, [holdEnabled, playBaseNote, releaseBaseNote, toggleHeldBaseNote])
 
-  const connectJacks = useCallback(
-    (from: ModDeskJackId, to: ModDeskJackId) => {
-      if (!allowedConnections.has(`${from}>${to}`)) {
-        setPatchStatus(`Blocked: ${from} cannot connect to ${to}.`)
-        return
-      }
-      setConnections((previousConnections) => {
-        const alreadyPatched = previousConnections.some(
-          (connection) => connection.from === from && connection.to === to,
-        )
-        if (alreadyPatched) {
-          setPatchStatus(`Cable removed ${from} -> ${to}`)
-          return previousConnections.filter(
-            (connection) => !(connection.from === from && connection.to === to),
-          )
-        }
-        const withoutDestination = previousConnections.filter((connection) => connection.to !== to)
-        setPatchStatus(`Patched ${from} -> ${to}`)
-        return [...withoutDestination, { from, to }]
-      })
-    },
-    [allowedConnections],
-  )
-
-  const disconnectCable = useCallback((connectionToRemove: PatchConnection) => {
-    setConnections((previousConnections) =>
-      previousConnections.filter(
-        (connection) =>
-          !(connection.from === connectionToRemove.from && connection.to === connectionToRemove.to),
-      ),
-    )
-    setPatchStatus(`Cable removed ${connectionToRemove.from} -> ${connectionToRemove.to}`)
+  const cycleEngine = useCallback(() => {
+    setParams((previous) => {
+      const currentIndex = ENGINE_ORDER.indexOf(previous.engine)
+      const nextEngine = ENGINE_ORDER[(currentIndex + 1) % ENGINE_ORDER.length]
+      return { ...previous, engine: nextEngine }
+    })
+    setStatusText('Engine cycled.')
   }, [])
 
-  const connectedJacks = useMemo(() => {
-    const connected = new Set<ModDeskJackId>()
-    for (const connection of connections) {
-      connected.add(connection.from)
-      connected.add(connection.to)
+  const randomizeTone = useCallback(() => {
+    const randomEngine = ENGINE_ORDER[Math.floor(Math.random() * ENGINE_ORDER.length)]
+    const randomFilterType = FILTER_TYPES[Math.floor(Math.random() * FILTER_TYPES.length)]
+    const randomized: SynthParameters = {
+      ...DEFAULT_PARAMETERS,
+      engine: randomEngine,
+      filterType: randomFilterType,
+      masterVolume: randomBetween(0.5, 0.95),
+      detuneCents: randomBetween(-180, 180),
+      mix: randomBetween(0.1, 0.95),
+      filterCutoff: randomBetween(220, 6400),
+      resonance: randomBetween(1, 14),
+      attack: randomBetween(0.005, 0.4),
+      decay: randomBetween(0.08, 1.2),
+      sustain: randomBetween(0.25, 0.95),
+      release: randomBetween(0.08, 2.2),
+      delayTime: randomBetween(0.06, 0.66),
+      delayFeedback: randomBetween(0.05, 0.8),
+      delayMix: randomBetween(0.1, 0.8),
+      lfoRate: randomBetween(0.2, 9),
+      lfoDepth: randomBetween(0.05, 0.8),
+      reverbMix: randomBetween(0.05, 0.8),
+      reverbDecay: randomBetween(0.8, 5.2),
+      distDrive: randomBetween(2, 18),
+      distMix: randomBetween(0.02, 0.5),
     }
-    return connected
-  }, [connections])
+    setParams(randomized)
+    synthRef.current?.setPatchConnections(DEFAULT_PATCH_CONNECTIONS)
+    setStatusText('Randomized tone on factory routing.')
+  }, [])
 
-  const cables = useMemo(
-    () =>
-      connections
-        .map((connection) => {
-          const fromPoint = jackPoints[connection.from]
-          const toPoint = jackPoints[connection.to]
-          if (!fromPoint || !toPoint) {
-            return null
-          }
-          return {
-            ...connection,
-            path: buildCablePath(fromPoint, toPoint),
-            color: MODULE_COLORS[JACK_LOOKUP[connection.from].module],
-          }
-        })
-        .filter((cable): cable is PatchConnection & { path: string; color: string } => cable !== null),
-    [connections, jackPoints],
-  )
-
-  const onJackClick = useCallback(
-    (jack: JackDefinition) => {
-      if (!selectedOutputJack) {
-        if (jack.direction === 'out') {
-          setSelectedOutputJack(jack.id)
-          setPatchStatus(`Source selected: ${jack.id}`)
-        } else {
-          setPatchStatus('Select an OUT jack first.')
-        }
-        return
-      }
-
-      if (selectedOutputJack === jack.id) {
-        setSelectedOutputJack(null)
-        setGhostPoint(null)
-        setPatchStatus('Patch selection cleared.')
-        return
-      }
-
-      if (jack.direction === 'in') {
-        connectJacks(selectedOutputJack, jack.id)
-        setSelectedOutputJack(null)
-        setGhostPoint(null)
-        return
-      }
-
-      setSelectedOutputJack(jack.id)
-      setPatchStatus(`Source selected: ${jack.id}`)
-    },
-    [connectJacks, selectedOutputJack],
-  )
-
-  const onChassisPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!selectedOutputJack || !chassisRef.current) {
-        return
-      }
-      const rect = chassisRef.current.getBoundingClientRect()
-      setGhostPoint({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      })
-    },
-    [selectedOutputJack],
-  )
-
-  const ghostCablePath = useMemo(() => {
-    if (!selectedOutputJack || !ghostPoint) {
-      return null
-    }
-    const fromPoint = jackPoints[selectedOutputJack]
-    if (!fromPoint) {
-      return null
-    }
-    return buildCablePath(fromPoint, ghostPoint)
-  }, [ghostPoint, jackPoints, selectedOutputJack])
+  const resetTone = useCallback(() => {
+    setParams({ ...DEFAULT_PARAMETERS })
+    setOctaveShift(0)
+    setSyncEnabled(false)
+    setLoopEnabled(false)
+    setSlope24Enabled(true)
+    setCurveEnabled(false)
+    setDelaySyncEnabled(false)
+    setDelayPingPongEnabled(false)
+    setDelayDuckEnabled(false)
+    setVelocityAmount(0.9)
+    synthRef.current?.setPatchConnections(DEFAULT_PATCH_CONNECTIONS)
+    setStatusText('Parameters reset to factory defaults.')
+  }, [])
 
   const keyboardLegend = useMemo(() => {
     const legend = new Map<number, string>()
@@ -859,254 +454,591 @@ function App() {
 
   const activeNoteSet = useMemo(() => new Set(activeNotes), [activeNotes])
 
-  const blackKeys = useMemo(
-    () =>
-      WHITE_NOTES.map((note, index) => {
-        const blackNote = note + 1
-        if (!BLACK_OFFSETS.has(blackNote % 12)) {
-          return null
-        }
-        return { note: blackNote, index }
-      }).filter((item): item is { note: number; index: number } => item !== null),
-    [],
+  const knobs = useMemo<HotKnobConfig[]>(
+    () => [
+      {
+        id: 'master',
+        label: 'VOL',
+        rect: RECTS.masterKnob,
+        value: params.masterVolume,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.masterVolume),
+        onChange: (value) => setParameter('masterVolume', value),
+      },
+      {
+        id: 'osc-freq',
+        label: 'FREQ',
+        rect: RECTS.oscFrequency,
+        value: params.detuneCents,
+        min: -600,
+        max: 600,
+        step: 1,
+        readout: `${Math.round(params.detuneCents)}c`,
+        onChange: (value) => setParameter('detuneCents', value),
+      },
+      {
+        id: 'osc-fine',
+        label: 'FINE',
+        rect: RECTS.oscFine,
+        value: params.mix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.mix),
+        onChange: (value) => setParameter('mix', value),
+      },
+      {
+        id: 'osc-pw',
+        label: 'PW',
+        rect: RECTS.oscPulseWidth,
+        value: params.lfoDepth,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.lfoDepth),
+        onChange: (value) => setParameter('lfoDepth', value),
+      },
+      {
+        id: 'osc-sub',
+        label: 'SUB',
+        rect: RECTS.oscSub,
+        value: params.distMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.distMix),
+        onChange: (value) => setParameter('distMix', value),
+      },
+      {
+        id: 'osc-level',
+        label: 'LEVEL',
+        rect: RECTS.oscLevel,
+        value: params.reverbMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.reverbMix),
+        onChange: (value) => setParameter('reverbMix', value),
+      },
+      {
+        id: 'filter-cutoff',
+        label: 'CUTOFF',
+        rect: RECTS.filterCutoff,
+        value: params.filterCutoff,
+        min: 80,
+        max: 12000,
+        step: 1,
+        readout: formatCutoff(params.filterCutoff),
+        onChange: (value) => setParameter('filterCutoff', value),
+      },
+      {
+        id: 'filter-res',
+        label: 'RES',
+        rect: RECTS.filterResonance,
+        value: params.resonance,
+        min: 0.2,
+        max: 20,
+        step: 0.1,
+        readout: params.resonance.toFixed(1),
+        onChange: (value) => setParameter('resonance', value),
+      },
+      {
+        id: 'filter-drive',
+        label: 'DRIVE',
+        rect: RECTS.filterDrive,
+        value: params.distDrive,
+        min: 1,
+        max: 32,
+        step: 0.1,
+        readout: params.distDrive.toFixed(1),
+        onChange: (value) => setParameter('distDrive', value),
+      },
+      {
+        id: 'filter-env',
+        label: 'ENV',
+        rect: RECTS.filterEnvAmt,
+        value: params.delayMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.delayMix),
+        onChange: (value) => setParameter('delayMix', value),
+      },
+      {
+        id: 'filter-track',
+        label: 'TRACK',
+        rect: RECTS.filterEnvTrack,
+        value: params.lfoRate,
+        min: 0.05,
+        max: 14,
+        step: 0.01,
+        readout: `${params.lfoRate.toFixed(1)}Hz`,
+        onChange: (value) => setParameter('lfoRate', value),
+      },
+      {
+        id: 'env-velocity',
+        label: 'VEL',
+        rect: RECTS.envVelocity,
+        value: velocityAmount,
+        min: 0.1,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(velocityAmount),
+        onChange: (value) => setVelocityAmount(value),
+      },
+      {
+        id: 'delay-time',
+        label: 'TIME',
+        rect: RECTS.delayTime,
+        value: params.delayTime,
+        min: 0.02,
+        max: 0.9,
+        step: 0.001,
+        readout: formatMilliseconds(params.delayTime),
+        onChange: (value) => setParameter('delayTime', value),
+      },
+      {
+        id: 'delay-feedback',
+        label: 'FDBK',
+        rect: RECTS.delayFeedback,
+        value: params.delayFeedback,
+        min: 0,
+        max: 0.92,
+        step: 0.01,
+        readout: formatPercent(params.delayFeedback),
+        onChange: (value) => setParameter('delayFeedback', value),
+      },
+      {
+        id: 'delay-mix',
+        label: 'MIX',
+        rect: RECTS.delayMix,
+        value: params.delayMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.delayMix),
+        onChange: (value) => setParameter('delayMix', value),
+      },
+      {
+        id: 'delay-tone',
+        label: 'TONE',
+        rect: RECTS.delayTone,
+        value: params.reverbDecay,
+        min: 0.4,
+        max: 6.5,
+        step: 0.05,
+        readout: `${params.reverbDecay.toFixed(1)}s`,
+        onChange: (value) => setParameter('reverbDecay', value),
+      },
+      {
+        id: 'delay-mod',
+        label: 'MOD',
+        rect: RECTS.delayMod,
+        value: params.lfoDepth,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.lfoDepth),
+        onChange: (value) => setParameter('lfoDepth', value),
+      },
+      {
+        id: 'scale',
+        label: 'SCALE',
+        rect: RECTS.scaleKnob,
+        value: params.mix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.mix),
+        onChange: (value) => setParameter('mix', value),
+      },
+      {
+        id: 'glide',
+        label: 'GLIDE',
+        rect: RECTS.glideKnob,
+        value: params.release,
+        min: 0.02,
+        max: 3.6,
+        step: 0.001,
+        readout: formatMilliseconds(params.release),
+        onChange: (value) => setParameter('release', value),
+      },
+      {
+        id: 'macro-1',
+        label: 'M1',
+        rect: RECTS.macro1,
+        value: params.filterCutoff,
+        min: 80,
+        max: 12000,
+        step: 1,
+        readout: formatCutoff(params.filterCutoff),
+        onChange: (value) => setParameter('filterCutoff', value),
+      },
+      {
+        id: 'macro-2',
+        label: 'M2',
+        rect: RECTS.macro2,
+        value: params.delayMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.delayMix),
+        onChange: (value) => setParameter('delayMix', value),
+      },
+      {
+        id: 'macro-3',
+        label: 'M3',
+        rect: RECTS.macro3,
+        value: params.reverbMix,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        readout: formatPercent(params.reverbMix),
+        onChange: (value) => setParameter('reverbMix', value),
+      },
+      {
+        id: 'macro-4',
+        label: 'M4',
+        rect: RECTS.macro4,
+        value: params.lfoRate,
+        min: 0.05,
+        max: 14,
+        step: 0.01,
+        readout: `${params.lfoRate.toFixed(1)}Hz`,
+        onChange: (value) => setParameter('lfoRate', value),
+      },
+    ],
+    [params, setParameter, velocityAmount],
   )
 
-  const topDisplay = useMemo(() => {
-    const holdText = holdEnabled ? ' HOLD' : ''
-    const arpText = arpEnabled ? ' ARP' : ''
-    return `${params.engine.toUpperCase()}${holdText}${arpText}`
-  }, [arpEnabled, holdEnabled, params.engine])
+  const topDisplayLineOne = `${params.engine.toUpperCase()} ${syncEnabled ? 'SYNC' : 'FREE'} ${
+    delaySyncEnabled ? 'D-SYNC' : ''
+  }`
+  const topDisplayLineTwo = `${isAudioReady ? 'AUDIO ON' : 'POWER OFF'} / OCT ${octaveShift >= 0 ? '+' : ''}${octaveShift}`
 
   return (
     <main className="mod-desk-root">
-      <div className="desk-scroll" ref={scrollRef}>
+      <div className="desk-scroll">
         <div className="desk-stage">
           <div
             className="chassis"
-            ref={chassisRef}
             onPointerDownCapture={() => {
               if (!isAudioReady) {
                 void ensureAudioStarted()
               }
             }}
-            onPointerMove={onChassisPointerMove}
-            onPointerLeave={() => setGhostPoint(null)}
           >
             <img src={chassisImage} className="chassis-image" alt="Mod Desk chassis" draggable={false} />
 
-            <svg className="cable-overlay" aria-hidden="true">
-              {cables.map((cable) => (
-                <g key={`${cable.from}->${cable.to}`}>
-                  <path className="cable-hit" d={cable.path} onClick={() => disconnectCable(cable)} />
-                  <path className="cable cable-main" style={{ stroke: cable.color }} d={cable.path} />
-                  <path className="cable cable-glow" style={{ stroke: cable.color }} d={cable.path} />
-                </g>
-              ))}
-              {ghostCablePath ? <path className="cable cable-ghost" d={ghostCablePath} /> : null}
-            </svg>
-
-            <div className="lcd-readout top" style={styleFromRect(LCD_TOP_RECT)}>
-              <span>{topDisplay}</span>
-              <span>
-                {isAudioReady ? 'AUDIO ON' : 'POWER OFF'} / {activeNotes.length} VOICES
-              </span>
+            <div className="lcd-readout top" style={styleFromRect(RECTS.topLcd)}>
+              <span>{topDisplayLineOne}</span>
+              <span>{topDisplayLineTwo}</span>
             </div>
-
-            <div className="lcd-readout osc" style={styleFromRect(LCD_OSC_RECT)}>
+            <div className="lcd-readout osc" style={styleFromRect(RECTS.oscLcd)}>
               <span>ENGINE {params.engine.toUpperCase()}</span>
-              <span>DETUNE {params.detuneCents.toFixed(1)} / MIX {Math.round(params.mix * 100)}%</span>
-            </div>
-            <div className="lcd-readout filter" style={styleFromRect(LCD_FILTER_RECT)}>
-              <span>{params.filterType.toUpperCase()}</span>
               <span>
-                CUTOFF {Math.round(params.filterCutoff)} / RES {params.resonance.toFixed(1)}
+                OCT {octaveShift >= 0 ? '+' : ''}
+                {octaveShift} / DETUNE {Math.round(params.detuneCents)}c
               </span>
             </div>
-            <div className="lcd-readout env" style={styleFromRect(LCD_ENV_RECT)}>
-              <span>ENV A D S R</span>
+            <div className="lcd-readout filter" style={styleFromRect(RECTS.filterLcd)}>
+              <span>{params.filterType.toUpperCase()} / {slope24Enabled ? '24dB' : '12dB'}</span>
+              <span>CUTOFF {formatCutoff(params.filterCutoff)} RES {params.resonance.toFixed(1)}</span>
+            </div>
+            <div className="lcd-readout env" style={styleFromRect(RECTS.envLcd)}>
               <span>
-                {Math.round(params.attack * 1000)} {Math.round(params.decay * 1000)} {Math.round(params.sustain * 100)}{' '}
-                {Math.round(params.release * 1000)}
+                A {formatMilliseconds(params.attack)} D {formatMilliseconds(params.decay)}
+              </span>
+              <span>
+                S {formatPercent(params.sustain)} R {formatMilliseconds(params.release)} {loopEnabled ? 'LOOP' : ''}
               </span>
             </div>
-            <div className="lcd-readout delay" style={styleFromRect(LCD_DELAY_RECT)}>
-              <span>TIME {Math.round(params.delayTime * 1000)} / FEEDBACK {Math.round(params.delayFeedback * 100)}</span>
-              <span>MIX {Math.round(params.delayMix * 100)} / LFO {params.lfoRate.toFixed(1)}Hz</span>
+            <div className="lcd-readout delay" style={styleFromRect(RECTS.delayLcd)}>
+              <span>
+                TIME {formatMilliseconds(params.delayTime)} FB {formatPercent(params.delayFeedback)}
+              </span>
+              <span>
+                MIX {formatPercent(params.delayMix)} {delayPingPongEnabled ? 'PING' : ''} {delayDuckEnabled ? 'DUCK' : ''}
+              </span>
             </div>
 
-            {KNOBS.map((knob) => (
-              <HotKnob
-                key={knob.id}
-                rect={knob.rect}
-                label={knob.label}
-                value={params[knob.param] as number}
-                min={knob.min}
-                max={knob.max}
-                step={knob.step}
-                readout={knob.readout(params)}
-                onChange={(value) => setNumericParameter(knob.param, value)}
+            {knobs.map((knob) => (
+              <HotKnob key={knob.id} {...knob} />
+            ))}
+
+            <label className="env-slider-wrap" style={styleFromRect(RECTS.envAttackSlider)}>
+              <input
+                className="env-slider"
+                type="range"
+                min={0.003}
+                max={1.8}
+                step={0.001}
+                value={params.attack}
+                onChange={(event) => setParameter('attack', Number(event.target.value))}
+                aria-label="Attack fader"
               />
-            ))}
-
-            {ENV_SLIDERS.map((slider) => (
-              <label
-                key={slider.key}
-                className="env-slider-wrap"
-                style={styleFromRect(slider.rect)}
-                title={`${slider.label} envelope`}
-              >
-                <input
-                  type="range"
-                  className="env-slider"
-                  min={slider.min}
-                  max={slider.max}
-                  step={slider.step}
-                  value={params[slider.key] as number}
-                  onChange={(event) => setNumericParameter(slider.key, Number(event.target.value))}
-                />
-              </label>
-            ))}
-
-            {ENGINE_BUTTONS.map((engineButton) => (
-              <button
-                key={engineButton.engine}
-                type="button"
-                className={`hot-button engine ${params.engine === engineButton.engine ? 'is-active' : ''}`}
-                style={styleFromRect(engineButton.rect)}
-                onClick={() => updateParameter('engine', engineButton.engine)}
-                aria-label={`Select ${engineButton.label} engine`}
-              >
-                {engineButton.label}
-              </button>
-            ))}
-
-            {FILTER_TYPE_BUTTONS.map((filterButton) => (
-              <button
-                key={filterButton.type}
-                type="button"
-                className={`hot-button tiny ${params.filterType === filterButton.type ? 'is-active' : ''}`}
-                style={styleFromRect(filterButton.rect)}
-                onClick={() => updateParameter('filterType', filterButton.type)}
-                aria-label={`Set filter type ${filterButton.type}`}
+            </label>
+            <label className="env-slider-wrap" style={styleFromRect(RECTS.envDecaySlider)}>
+              <input
+                className="env-slider"
+                type="range"
+                min={0.01}
+                max={2.8}
+                step={0.001}
+                value={params.decay}
+                onChange={(event) => setParameter('decay', Number(event.target.value))}
+                aria-label="Decay fader"
               />
-            ))}
+            </label>
+            <label className="env-slider-wrap" style={styleFromRect(RECTS.envSustainSlider)}>
+              <input
+                className="env-slider"
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={params.sustain}
+                onChange={(event) => setParameter('sustain', Number(event.target.value))}
+                aria-label="Sustain fader"
+              />
+            </label>
+            <label className="env-slider-wrap" style={styleFromRect(RECTS.envReleaseSlider)}>
+              <input
+                className="env-slider"
+                type="range"
+                min={0.02}
+                max={3.6}
+                step={0.001}
+                value={params.release}
+                onChange={(event) => setParameter('release', Number(event.target.value))}
+                aria-label="Release fader"
+              />
+            </label>
 
             <button
               type="button"
               className={`hot-button transport ${isAudioReady ? 'is-active' : ''}`}
-              style={styleFromRect(TRANSPORT_BUTTONS.power)}
-              onClick={() => void ensureAudioStarted()}
-              aria-label="Power on audio context"
+              style={styleFromRect(RECTS.transportPlay)}
+              onClick={() => {
+                void ensureAudioStarted()
+                setStatusText('Audio resumed.')
+              }}
+              aria-label="Play / power"
             />
             <button
               type="button"
               className="hot-button transport"
-              style={styleFromRect(TRANSPORT_BUTTONS.panic)}
+              style={styleFromRect(RECTS.transportStop)}
               onClick={panic}
-              aria-label="Panic all notes off"
+              aria-label="Stop / panic"
             />
             <button
               type="button"
               className="hot-button transport"
-              style={styleFromRect(TRANSPORT_BUTTONS.factoryPatch)}
-              onClick={() => {
-                setConnections([...DEFAULT_PATCH_CONNECTIONS])
-                setSelectedOutputJack(null)
-                setPatchStatus('Factory patch restored.')
-              }}
-              aria-label="Restore factory patch"
+              style={styleFromRect(RECTS.transportRandom)}
+              onClick={randomizeTone}
+              aria-label="Randomize tone on factory route"
             />
             <button
               type="button"
               className="hot-button transport"
-              style={styleFromRect(TRANSPORT_BUTTONS.clearPatch)}
-              onClick={() => {
-                setConnections([])
-                setSelectedOutputJack(null)
-                setPatchStatus('Patch cleared.')
-              }}
-              aria-label="Clear all cables"
+              style={styleFromRect(RECTS.transportSave)}
+              onClick={resetTone}
+              aria-label="Reset tone settings"
+            />
+
+            <button
+              type="button"
+              className="hot-button module-button"
+              style={styleFromRect(RECTS.oscWaveButton)}
+              onClick={cycleEngine}
+              aria-label="Cycle oscillator engine"
             />
             <button
               type="button"
-              className={`hot-button transport ${holdEnabled ? 'is-active' : ''}`}
-              style={styleFromRect(TRANSPORT_BUTTONS.hold)}
+              className={`hot-button module-button ${syncEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.oscSyncButton)}
+              onClick={() => setSyncEnabled((previous) => !previous)}
+              aria-label="Oscillator sync toggle"
+            />
+            <button
+              type="button"
+              className="hot-button module-button"
+              style={styleFromRect(RECTS.oscOctDownButton)}
               onClick={() => {
-                setHoldEnabled((previousHold) => {
-                  const nextHold = !previousHold
-                  if (!nextHold) {
+                setOctaveShift((previous) => clamp(previous - 1, -2, 2))
+                setStatusText('Octave shifted down.')
+              }}
+              aria-label="Octave down"
+            />
+            <button
+              type="button"
+              className="hot-button module-button"
+              style={styleFromRect(RECTS.oscOctUpButton)}
+              onClick={() => {
+                setOctaveShift((previous) => clamp(previous + 1, -2, 2))
+                setStatusText('Octave shifted up.')
+              }}
+              aria-label="Octave up"
+            />
+
+            <button
+              type="button"
+              className="hot-button module-button"
+              style={styleFromRect(RECTS.filterTypeButton)}
+              onClick={() =>
+                setParameter(
+                  'filterType',
+                  FILTER_TYPES[(FILTER_TYPES.indexOf(params.filterType) + 1) % FILTER_TYPES.length],
+                )
+              }
+              aria-label="Cycle filter type"
+            />
+            <button
+              type="button"
+              className={`hot-button module-button ${slope24Enabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.filterSlopeButton)}
+              onClick={() => setSlope24Enabled((previous) => !previous)}
+              aria-label="Toggle filter slope"
+            />
+            <button
+              type="button"
+              className={`hot-button module-button ${curveEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.filterCurveButton)}
+              onClick={() => setCurveEnabled((previous) => !previous)}
+              aria-label="Toggle filter curve"
+            />
+
+            <button
+              type="button"
+              className={`hot-button module-button ${loopEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.envLoopButton)}
+              onClick={() => setLoopEnabled((previous) => !previous)}
+              aria-label="Envelope loop toggle"
+            />
+
+            <button
+              type="button"
+              className={`hot-button module-button ${delaySyncEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.delaySyncButton)}
+              onClick={() => setDelaySyncEnabled((previous) => !previous)}
+              aria-label="Delay sync toggle"
+            />
+            <button
+              type="button"
+              className={`hot-button module-button ${delayPingPongEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.delayPingPongButton)}
+              onClick={() => setDelayPingPongEnabled((previous) => !previous)}
+              aria-label="Delay ping pong toggle"
+            />
+            <button
+              type="button"
+              className={`hot-button module-button ${delayDuckEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.delayDuckButton)}
+              onClick={() => setDelayDuckEnabled((previous) => !previous)}
+              aria-label="Delay duck toggle"
+            />
+
+            <button
+              type="button"
+              className={`hot-button module-button ${holdEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.hold)}
+              onClick={() => {
+                setHoldEnabled((previous) => {
+                  const next = !previous
+                  if (!next) {
                     panic()
                   }
-                  return nextHold
+                  return next
                 })
               }}
-              aria-label="Toggle hold"
+              aria-label="Hold toggle"
             />
             <button
               type="button"
-              className={`hot-button transport ${arpEnabled ? 'is-active' : ''}`}
-              style={styleFromRect(TRANSPORT_BUTTONS.arp)}
-              onClick={() => setArpEnabled((previousArp) => !previousArp)}
-              aria-label="Toggle arp (visual mode)"
+              className={`hot-button module-button ${arpEnabled ? 'is-active' : ''}`}
+              style={styleFromRect(RECTS.arp)}
+              onClick={() => setArpEnabled((previous) => !previous)}
+              aria-label="Arp toggle"
             />
 
-            {JACKS.map((jack) => (
-              <button
-                key={jack.id}
-                type="button"
-                ref={(node) => registerJackRef(jack.id, node)}
-                className={`jack-hotspot ${jack.direction} ${
-                  selectedOutputJack === jack.id ? 'is-selected' : ''
-                } ${connectedJacks.has(jack.id) ? 'is-connected' : ''}`}
-                style={styleFromRect(JACK_LAYOUT[jack.id])}
-                onClick={() => onJackClick(jack)}
-                aria-label={`${jack.id} patch jack`}
-              />
-            ))}
-
-            <div className="keybed-overlay" style={styleFromRect(KEYBED_RECT)}>
-              {WHITE_NOTES.map((note, index) => (
+            <div className="keybed-overlay" style={styleFromRect(RECTS.keybed)}>
+              {WHITE_KEY_NOTES.map((baseNote, index) => (
                 <button
-                  key={`w-${note}`}
+                  key={`white-${baseNote}`}
                   type="button"
-                  className={`key white ${activeNoteSet.has(note) ? 'is-active' : ''}`}
+                  className={`key white ${activeNoteSet.has(baseNote + octaveShift * 12) ? 'is-active' : ''}`}
                   style={{
-                    left: `${(index / WHITE_NOTES.length) * 100}%`,
-                    width: `${100 / WHITE_NOTES.length}%`,
+                    left: `${(index / WHITE_KEY_NOTES.length) * 100}%`,
+                    width: `${100 / WHITE_KEY_NOTES.length}%`,
                   }}
-                  onPointerDown={() => handleNotePress(note)}
-                  onPointerUp={() => handleNoteRelease(note)}
-                  onPointerLeave={() => handleNoteRelease(note)}
-                  aria-label={`White key ${note}`}
+                  onPointerDown={() => {
+                    if (holdEnabled) {
+                      void toggleHeldBaseNote(baseNote)
+                    } else {
+                      void playBaseNote(baseNote)
+                    }
+                  }}
+                  onPointerUp={() => {
+                    if (!holdEnabled) {
+                      releaseBaseNote(baseNote)
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (!holdEnabled) {
+                      releaseBaseNote(baseNote)
+                    }
+                  }}
+                  aria-label={`White key ${baseNote}`}
                 >
-                  {keyboardLegend.get(note) ?? ''}
+                  {keyboardLegend.get(baseNote) ?? ''}
                 </button>
               ))}
-              {blackKeys.map((blackKey) => (
-                <button
-                  key={`b-${blackKey.note}`}
-                  type="button"
-                  className={`key black ${activeNoteSet.has(blackKey.note) ? 'is-active' : ''}`}
-                  style={{
-                    left: `${((blackKey.index + 1) / WHITE_NOTES.length) * 100 - 1.95}%`,
-                    width: '3.9%',
-                  }}
-                  onPointerDown={() => handleNotePress(blackKey.note)}
-                  onPointerUp={() => handleNoteRelease(blackKey.note)}
-                  onPointerLeave={() => handleNoteRelease(blackKey.note)}
-                  aria-label={`Black key ${blackKey.note}`}
-                >
-                  {keyboardLegend.get(blackKey.note) ?? ''}
-                </button>
-              ))}
+              {BLACK_KEYS.map((blackKey) => {
+                const widthPercent = (BLACK_KEY_WIDTH / WHITE_KEY_WIDTH) * 100
+                const centerPercent = ((blackKey.centerX - WHITE_KEY_START_X) / WHITE_KEY_WIDTH) * 100
+                return (
+                  <button
+                    key={`black-${blackKey.note}`}
+                    type="button"
+                    className={`key black ${activeNoteSet.has(blackKey.note + octaveShift * 12) ? 'is-active' : ''}`}
+                    style={{
+                      left: `${centerPercent - widthPercent * 0.5}%`,
+                      width: `${widthPercent}%`,
+                    }}
+                    onPointerDown={() => {
+                      if (holdEnabled) {
+                        void toggleHeldBaseNote(blackKey.note)
+                      } else {
+                        void playBaseNote(blackKey.note)
+                      }
+                    }}
+                    onPointerUp={() => {
+                      if (!holdEnabled) {
+                        releaseBaseNote(blackKey.note)
+                      }
+                    }}
+                    onPointerLeave={() => {
+                      if (!holdEnabled) {
+                        releaseBaseNote(blackKey.note)
+                      }
+                    }}
+                    aria-label={`Black key ${blackKey.note}`}
+                  >
+                    {keyboardLegend.get(blackKey.note) ?? ''}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
       </div>
 
       <footer className="status-strip">
-        <span>{patchStatus}</span>
-        <span>Keyboard: Z-M + Q-U</span>
+        <span>{statusText}</span>
+        <span>Route: OSC → FILTER → DIST → DELAY → REVERB → MASTER</span>
       </footer>
     </main>
   )

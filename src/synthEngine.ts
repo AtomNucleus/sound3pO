@@ -109,6 +109,7 @@ export const DEFAULT_PATCH_CONNECTIONS: PatchConnection[] = [
   { from: 'dist.out', to: 'delay.in' },
   { from: 'delay.out', to: 'reverb.in' },
   { from: 'reverb.out', to: 'master.in' },
+  { from: 'env.out', to: 'filter.cutoffCv' },
   { from: 'lfo.out', to: 'filter.cutoffCv' },
 ]
 

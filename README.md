@@ -20,18 +20,15 @@ npm run preview
 
 - **Image-as-chassis UI**
   - The Mod Desk PNG is the full interface artwork
-  - Interactive overlays are positioned on top (knobs, buttons, LCDs, keys, jacks)
+  - Interactive overlays are positioned on top (knobs, buttons, LCDs, keys)
   - Click **PLAY / POWER** first to resume audio
-- **Patchable module desk UI** with colored modules:
+- **Module controls mapped to the chassis art**:
   - OSC (orange)
   - FILTER (teal)
   - ENV (yellow)
   - DELAY (red)
   - LFO, DIST, REVERB, OUTPUT
-- **Virtual cable patching**
-  - Click an output jack, then click an input jack to connect
-  - Click a cable to remove it
-  - Factory patch / clear patch controls
+- **Factory signal routing**: OSC → FILTER → DIST → DELAY → REVERB → MASTER
 - **Playable keyboard controls**
   - On-screen piano overlays on the drawn keyboard
   - Computer keyboard mapping (Z-M low row + Q-U upper row)
