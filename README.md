@@ -18,6 +18,10 @@ npm run preview
 
 ## What is included
 
+- **Image-as-chassis UI**
+  - The Mod Desk PNG is the full interface artwork
+  - Interactive overlays are positioned on top (knobs, buttons, LCDs, keys, jacks)
+  - Click **PLAY / POWER** first to resume audio
 - **Patchable module desk UI** with colored modules:
   - OSC (orange)
   - FILTER (teal)
@@ -29,9 +33,12 @@ npm run preview
   - Click a cable to remove it
   - Factory patch / clear patch controls
 - **Playable keyboard controls**
-  - On-screen piano
-  - Computer keyboard mapping (Z-M low row + A-I upper accents)
+  - On-screen piano overlays on the drawn keyboard
+  - Computer keyboard mapping (Z-M low row + Q-U upper row)
   - Hold mode toggle and panic/all-notes-off
+- **Direct manipulation controls**
+  - Drag knobs up/down to morph parameters in real time
+  - Click keys to play notes
 - **Web Audio synth engine**
   - AudioContext starts on first user gesture
   - Polyphonic voices
