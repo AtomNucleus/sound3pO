@@ -49,10 +49,27 @@ npm run preview
 7. Perc blip
 8. Choir / formant-ish
 
-## Netlify
+## Live demo (Netlify)
+
+Anonymous claimable deploy:
+
+- **URL:** https://lucent-naiad-8237ad.netlify.app/
+- **Password:** `My-Drop-Site` (temporary Drop protection)
+- **Claim ownership (1 hour):** https://app.netlify.com/drop/lucent-naiad-8237ad
+
+After claiming in your Netlify account you can remove the password and keep the site permanently.
+
+## Netlify config
 
 `netlify.toml` is included with:
 
 - publish directory: `dist`
 - build command: `npm run build`
 - SPA fallback redirect to `index.html`
+
+Redeploy from this repo:
+
+```bash
+npm run build
+npx netlify-cli deploy --dir=dist --prod
+```
