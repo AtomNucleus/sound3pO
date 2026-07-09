@@ -57,9 +57,9 @@ npm run preview
 
 Anonymous claimable deploy:
 
-- **URL:** https://reliable-conkies-28effe.netlify.app/
+- **URL:** https://fabulous-pegasus-4c14ec.netlify.app/
 - **Password:** `My-Drop-Site` (temporary Drop protection)
-- **Claim ownership (1 hour):** https://app.netlify.com/drop/reliable-conkies-28effe
+- **Claim ownership (1 hour):** https://app.netlify.com/drop/fabulous-pegasus-4c14ec
 
 After claiming in your Netlify account you can remove the password and keep the site permanently.
 
