@@ -76,7 +76,41 @@
   padding: 0;
   background: rgba(0, 0, 0, 0.001);
   border-radius: 50%;
-  cursor: ns-resize;
+  touch-action: none;
+  cursor: grab;
+  transform: scale(1);
+  transition: transform 80ms ease;
+}
+
+.hot-knob.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.03);
+}
+
+.hot-knob-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  transform-origin: center;
+  transition: transform 55ms linear;
+}
+
+.hot-knob.is-dragging .hot-knob-face {
+  transition: none;
+}
+
+.hot-knob-tick {
+  position: absolute;
+  left: calc(50% - 1.5px);
+  top: 10%;
+  width: 3px;
+  height: 42%;
+  border-radius: 999px;
+  background: #f4f2e4;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.58),
+    0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 .hot-knob-ring {
@@ -111,9 +145,13 @@
 .hot-knob:focus-visible .hot-knob-ring,
 .hot-knob.is-dragging .hot-knob-ring {
   border-color: rgba(158, 255, 213, 0.7);
-  box-shadow: 0 0 0 1px rgba(53, 94, 76, 0.34);
+  box-shadow:
+    0 0 0 1px rgba(53, 94, 76, 0.34),
+    0 0 10px rgba(84, 214, 172, 0.25);
 }
 
+.hot-knob:hover .hot-knob-tooltip,
+.hot-knob:focus-visible .hot-knob-tooltip,
 .hot-knob.is-dragging .hot-knob-tooltip {
   opacity: 1;
 }
@@ -121,13 +159,14 @@
 .env-slider-wrap {
   position: absolute;
   margin: 0;
+  border-radius: 10px;
 }
 
 .env-slider {
   width: 100%;
   height: 100%;
   margin: 0;
-  opacity: 0.04;
+  opacity: 0.02;
   writing-mode: vertical-lr;
   direction: rtl;
   cursor: ns-resize;
@@ -135,7 +174,31 @@
 
 .env-slider:hover,
 .env-slider:focus-visible {
-  opacity: 0.3;
+  opacity: 0.24;
+}
+
+.env-fader-handle {
+  position: absolute;
+  left: 17%;
+  width: 66%;
+  height: 18%;
+  min-height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(28, 29, 28, 0.7);
+  background: linear-gradient(180deg, #2f3132, #18191a);
+  box-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transition: top 80ms ease;
+}
+
+.env-slider-wrap:hover .env-fader-handle,
+.env-slider-wrap:focus-within .env-fader-handle {
+  box-shadow:
+    0 0 0 1px rgba(145, 255, 207, 0.45),
+    0 1px 7px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .hot-button {

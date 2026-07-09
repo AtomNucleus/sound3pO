@@ -32,13 +32,16 @@ type HotKnobConfig = {
   onChange: (value: number) => void
 }
 
-type HotKnobProps = HotKnobConfig
+type HotKnobProps = HotKnobConfig & { defaultValue: number }
 
 const IMAGE_WIDTH = 1536
 const IMAGE_HEIGHT = 1024
 const WHITE_KEY_START_X = 417
 const WHITE_KEY_WIDTH = 590
 const BLACK_KEY_WIDTH = 26
+const KNOB_SWEEP_START = -135
+const KNOB_SWEEP_END = 135
+const KNOB_SWEEP_SPAN = KNOB_SWEEP_END - KNOB_SWEEP_START
 
 const ENGINE_ORDER: EngineMode[] = ['analog', 'fmBell', 'noise', 'pluck', 'bass', 'pad', 'perc', 'choir']
 const FILTER_TYPES: BiquadFilterType[] = ['lowpass', 'bandpass', 'highpass', 'notch']
@@ -173,15 +176,65 @@ const formatPercent = (value: number): string => `${Math.round(value * 100)}%`
 const formatCutoff = (value: number): string =>
   value >= 1000 ? `${(value / 1000).toFixed(2)}kHz` : `${Math.round(value)}Hz`
 
-function HotKnob({ rect, label, value, min, max, step, readout, onChange }: HotKnobProps) {
+const KNOB_DEFAULT_VALUES: Record<string, number> = {
+  master: DEFAULT_PARAMETERS.masterVolume,
+  'osc-freq': DEFAULT_PARAMETERS.detuneCents,
+  'osc-fine': DEFAULT_PARAMETERS.mix,
+  'osc-pw': DEFAULT_PARAMETERS.lfoDepth,
+  'osc-sub': DEFAULT_PARAMETERS.distMix,
+  'osc-level': DEFAULT_PARAMETERS.reverbMix,
+  'filter-cutoff': DEFAULT_PARAMETERS.filterCutoff,
+  'filter-res': DEFAULT_PARAMETERS.resonance,
+  'filter-drive': DEFAULT_PARAMETERS.distDrive,
+  'filter-env': DEFAULT_PARAMETERS.delayMix,
+  'filter-track': DEFAULT_PARAMETERS.lfoRate,
+  'env-velocity': 0.9,
+  'delay-time': DEFAULT_PARAMETERS.delayTime,
+  'delay-feedback': DEFAULT_PARAMETERS.delayFeedback,
+  'delay-mix': DEFAULT_PARAMETERS.delayMix,
+  'delay-tone': DEFAULT_PARAMETERS.reverbDecay,
+  'delay-mod': DEFAULT_PARAMETERS.lfoDepth,
+  scale: DEFAULT_PARAMETERS.mix,
+  glide: DEFAULT_PARAMETERS.release,
+  'macro-1': DEFAULT_PARAMETERS.filterCutoff,
+  'macro-2': DEFAULT_PARAMETERS.delayMix,
+  'macro-3': DEFAULT_PARAMETERS.reverbMix,
+  'macro-4': DEFAULT_PARAMETERS.lfoRate,
+}
+
+const valueToKnobAngle = (value: number, min: number, max: number): number => {
+  const t = clamp((value - min) / (max - min), 0, 1)
+  return KNOB_SWEEP_START + t * KNOB_SWEEP_SPAN
+}
+
+const pointerToKnobAngle = (pointerX: number, pointerY: number, centerX: number, centerY: number): number => {
+  let angle = (Math.atan2(pointerY - centerY, pointerX - centerX) * 180) / Math.PI + 90
+  if (angle > 180) {
+    angle -= 360
+  }
+  return clamp(angle, KNOB_SWEEP_START, KNOB_SWEEP_END)
+}
+
+function HotKnob({ rect, label, value, min, max, step, readout, onChange, defaultValue }: HotKnobProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const dragState = useRef<{ startY: number; startValue: number; pointerId: number } | null>(null)
+  const dragState = useRef<{
+    startY: number
+    startValue: number
+    centerX: number
+    centerY: number
+    pointerId: number
+  } | null>(null)
+
+  const displayAngle = valueToKnobAngle(value, min, max)
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const rectBounds = event.currentTarget.getBoundingClientRect()
       dragState.current = {
         startY: event.clientY,
         startValue: value,
+        centerX: rectBounds.left + rectBounds.width * 0.5,
+        centerY: rectBounds.top + rectBounds.height * 0.5,
         pointerId: event.pointerId,
       }
       setIsDragging(true)
@@ -195,9 +248,18 @@ function HotKnob({ rect, label, value, min, max, step, readout, onChange }: HotK
       if (!dragState.current || dragState.current.pointerId !== event.pointerId) {
         return
       }
+
+      const angle = pointerToKnobAngle(
+        event.clientX,
+        event.clientY,
+        dragState.current.centerX,
+        dragState.current.centerY,
+      )
+      const angularT = (angle - KNOB_SWEEP_START) / KNOB_SWEEP_SPAN
+      const angularValue = min + angularT * (max - min)
       const range = max - min
-      const delta = ((dragState.current.startY - event.clientY) / 160) * range
-      const nextValue = clamp(quantize(dragState.current.startValue + delta, min, step), min, max)
+      const verticalDelta = ((dragState.current.startY - event.clientY) / 220) * range * 0.18
+      const nextValue = clamp(quantize(angularValue + verticalDelta, min, step), min, max)
       onChange(nextValue)
     },
     [max, min, onChange, step],
@@ -221,8 +283,12 @@ function HotKnob({ rect, label, value, min, max, step, readout, onChange }: HotK
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onPointerLeave={endDrag}
+      onDoubleClick={() => onChange(clamp(defaultValue, min, max))}
       aria-label={`${label} knob`}
     >
+      <span className="hot-knob-face" style={{ transform: `rotate(${displayAngle}deg)` }}>
+        <span className="hot-knob-tick" />
+      </span>
       <span className="hot-knob-ring" />
       <span className="hot-knob-tooltip">
         {label} {readout}
@@ -717,6 +783,11 @@ function App() {
     [params, setParameter, velocityAmount],
   )
 
+  const faderHandleTop = useCallback((value: number, min: number, max: number): string => {
+    const t = clamp((value - min) / (max - min), 0, 1)
+    return `${t * 82}%`
+  }, [])
+
   const topDisplayLineOne = `${params.engine.toUpperCase()} ${syncEnabled ? 'SYNC' : 'FREE'} ${
     delaySyncEnabled ? 'D-SYNC' : ''
   }`
@@ -769,7 +840,7 @@ function App() {
             </div>
 
             {knobs.map((knob) => (
-              <HotKnob key={knob.id} {...knob} />
+              <HotKnob key={knob.id} {...knob} defaultValue={KNOB_DEFAULT_VALUES[knob.id] ?? knob.value} />
             ))}
 
             <label className="env-slider-wrap" style={styleFromRect(RECTS.envAttackSlider)}>
@@ -783,6 +854,11 @@ function App() {
                 onChange={(event) => setParameter('attack', Number(event.target.value))}
                 aria-label="Attack fader"
               />
+              <span
+                className="env-fader-handle"
+                style={{ top: faderHandleTop(params.attack, 0.003, 1.8) }}
+                aria-hidden
+              />
             </label>
             <label className="env-slider-wrap" style={styleFromRect(RECTS.envDecaySlider)}>
               <input
@@ -794,6 +870,11 @@ function App() {
                 value={params.decay}
                 onChange={(event) => setParameter('decay', Number(event.target.value))}
                 aria-label="Decay fader"
+              />
+              <span
+                className="env-fader-handle"
+                style={{ top: faderHandleTop(params.decay, 0.01, 2.8) }}
+                aria-hidden
               />
             </label>
             <label className="env-slider-wrap" style={styleFromRect(RECTS.envSustainSlider)}>
@@ -807,6 +888,11 @@ function App() {
                 onChange={(event) => setParameter('sustain', Number(event.target.value))}
                 aria-label="Sustain fader"
               />
+              <span
+                className="env-fader-handle"
+                style={{ top: faderHandleTop(params.sustain, 0, 1) }}
+                aria-hidden
+              />
             </label>
             <label className="env-slider-wrap" style={styleFromRect(RECTS.envReleaseSlider)}>
               <input
@@ -818,6 +904,11 @@ function App() {
                 value={params.release}
                 onChange={(event) => setParameter('release', Number(event.target.value))}
                 aria-label="Release fader"
+              />
+              <span
+                className="env-fader-handle"
+                style={{ top: faderHandleTop(params.release, 0.02, 3.6) }}
+                aria-hidden
               />
             </label>
 
