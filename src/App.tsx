@@ -9,6 +9,7 @@ import {
 } from 'react'
 import chassisImage from './assets/mod-desk-chassis.png'
 import './App.css'
+import ChordField from './ChordField'
 import {
   DEFAULT_PARAMETERS,
   DEFAULT_PATCH_CONNECTIONS,
@@ -237,6 +238,7 @@ function App() {
   const activeNotesRef = useRef(new Set<number>())
 
   const [params, setParams] = useState<SynthParameters>({ ...DEFAULT_PARAMETERS })
+  const [engineInstance, setEngineInstance] = useState<ModDeskSynthEngine | null>(null)
   const [isAudioReady, setIsAudioReady] = useState(false)
   const [statusText, setStatusText] = useState('Click PLAY to start audio.')
   const [holdEnabled, setHoldEnabled] = useState(false)
@@ -259,11 +261,13 @@ function App() {
   useEffect(() => {
     const synth = new ModDeskSynthEngine()
     synthRef.current = synth
+    setEngineInstance(synth)
     synth.updateParameters(params)
     synth.setPatchConnections(DEFAULT_PATCH_CONNECTIONS)
     return () => {
       synth.dispose()
       synthRef.current = null
+      setEngineInstance(null)
     }
   }, [])
 
@@ -1035,6 +1039,13 @@ function App() {
           </div>
         </div>
       </div>
+
+      <ChordField
+        engine={engineInstance}
+        isAudioReady={isAudioReady}
+        ensureAudioStarted={ensureAudioStarted}
+        onPanic={panic}
+      />
 
       <footer className="status-strip">
         <span>{statusText}</span>

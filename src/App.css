@@ -226,6 +226,144 @@
   color: #31423a;
 }
 
+.chord-field-panel {
+  margin-top: 0.9rem;
+  padding: 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(86, 73, 60, 0.25);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(255, 241, 205, 0.6), transparent 45%),
+    linear-gradient(180deg, #f5e9d2, #eadcc2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 249, 237, 0.7),
+    0 10px 26px rgba(54, 42, 29, 0.12);
+}
+
+.chord-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.chord-field-header h3 {
+  font-size: 1.05rem;
+  letter-spacing: 0.1em;
+}
+
+.chord-field-header p {
+  margin: 0;
+  font-family: var(--mono-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: #5f4f40;
+}
+
+.chord-field-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.cf-button {
+  border: 1px solid rgba(67, 56, 43, 0.28);
+  border-radius: 8px;
+  padding: 0.28rem 0.52rem;
+  background: rgba(255, 248, 235, 0.72);
+  font-family: var(--mono-font);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 100ms ease;
+}
+
+.cf-button:hover,
+.cf-button:focus-visible {
+  box-shadow: 0 0 0 1px rgba(71, 152, 127, 0.4);
+}
+
+.cf-button:active {
+  transform: scale(0.97);
+}
+
+.cf-button.is-active {
+  border-color: rgba(76, 150, 126, 0.8);
+  box-shadow: 0 0 0 1px rgba(66, 165, 132, 0.48);
+  background: rgba(217, 245, 228, 0.56);
+}
+
+.cf-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cf-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(67, 56, 43, 0.2);
+  border-radius: 8px;
+  padding: 0.24rem 0.4rem;
+  background: rgba(255, 248, 235, 0.62);
+  font-family: var(--mono-font);
+  font-size: 0.62rem;
+}
+
+.cf-slider input {
+  width: 130px;
+}
+
+.chord-field-canvas-wrap {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(73, 61, 45, 0.22);
+}
+
+.chord-field-canvas {
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  display: block;
+  touch-action: none;
+}
+
+.chord-field-footer {
+  margin-top: 0.56rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+
+.chord-field-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  font-family: var(--mono-font);
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  color: #3d4f44;
+}
+
+.chord-quality-guide {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.28rem;
+}
+
+.chord-quality-guide span {
+  border-radius: 999px;
+  border: 1px solid rgba(48, 43, 38, 0.24);
+  background: color-mix(in srgb, var(--chip) 34%, #fff2d8 66%);
+  padding: 0.14rem 0.45rem;
+  font-family: var(--mono-font);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+}
+
 @media (max-width: 1100px) {
   .desk-stage {
     min-width: 860px;
@@ -243,5 +381,14 @@
 
   .status-strip {
     font-size: 0.64rem;
+  }
+
+  .chord-field-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chord-field-footer {
+    flex-direction: column;
   }
 }

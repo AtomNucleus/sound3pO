@@ -191,6 +191,10 @@ export class ModDeskSynthEngine {
 
   private masterGain: GainNode | null = null
 
+  private analyserNode: AnalyserNode | null = null
+
+  private analyserTimeData: Float32Array<ArrayBuffer> | null = null
+
   private filterNode: BiquadFilterNode | null = null
 
   private distDrive: GainNode | null = null
@@ -223,6 +227,27 @@ export class ModDeskSynthEngine {
 
   public isReady(): boolean {
     return this.hasAudioContext
+  }
+
+  public getAnalyser(): AnalyserNode | null {
+    return this.analyserNode
+  }
+
+  public getLevel(): number {
+    if (!this.analyserNode) {
+      return 0
+    }
+    if (!this.analyserTimeData || this.analyserTimeData.length !== this.analyserNode.fftSize) {
+      this.analyserTimeData = new Float32Array(this.analyserNode.fftSize) as Float32Array<ArrayBuffer>
+    }
+    this.analyserNode.getFloatTimeDomainData(this.analyserTimeData)
+    let sum = 0
+    for (let index = 0; index < this.analyserTimeData.length; index += 1) {
+      const sample = this.analyserTimeData[index]
+      sum += sample * sample
+    }
+    const rms = Math.sqrt(sum / this.analyserTimeData.length)
+    return clamp(rms, 0, 1)
   }
 
   public async start(): Promise<void> {
@@ -353,6 +378,8 @@ export class ModDeskSynthEngine {
     }
     this.context = null
     this.noiseBuffer = null
+    this.analyserNode = null
+    this.analyserTimeData = null
   }
 
   private modulationTick = (): void => {
@@ -634,12 +661,16 @@ export class ModDeskSynthEngine {
 
     const masterGain = this.context.createGain()
     const limiter = this.context.createDynamicsCompressor()
+    const analyser = this.context.createAnalyser()
+    analyser.fftSize = 2048
+    analyser.smoothingTimeConstant = 0.8
     limiter.threshold.value = -11
     limiter.knee.value = 18
     limiter.ratio.value = 7
     limiter.attack.value = 0.003
     limiter.release.value = 0.11
     masterGain.connect(limiter).connect(this.context.destination)
+    masterGain.connect(analyser)
 
     this.outputNodes = {
       'osc.out': oscOut,
@@ -657,6 +688,8 @@ export class ModDeskSynthEngine {
     }
 
     this.masterGain = masterGain
+    this.analyserNode = analyser
+    this.analyserTimeData = new Float32Array(analyser.fftSize) as Float32Array<ArrayBuffer>
     this.filterNode = filterNode
     this.distDrive = distDrive
     this.distShaper = distShaper
