@@ -53,15 +53,25 @@ npm run preview
 7. Perc blip
 8. Choir / formant-ish
 
-## Live demo (Netlify)
+## Live demo (no password)
 
-Anonymous claimable deploy:
+**Public URL (no password):** https://sees-divide-summaries-barrier.trycloudflare.com/
 
-- **URL:** https://stunning-hotteok-f4bede.netlify.app/
-- **Password:** `My-Drop-Site` (temporary Drop protection)
-- **Claim ownership (1 hour):** https://app.netlify.com/drop/stunning-hotteok-f4bede
+### Permanent Netlify (remove Drop password)
 
-After claiming in your Netlify account you can remove the password and keep the site permanently.
+Anonymous Netlify Drop deploys are password-gated until claimed. To publish on Netlify **without a password**:
+
+1. Open this claim link while signed into Netlify (expires ~1 hour):  
+   https://app.netlify.com/drop/ephemeral-cuchufli-1036ac#drop_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3ODM1NzM3NzgsImV4cCI6MTc4MzU3NzM3OCwiaXNzIjoiTmV0bGlmeSIsInNlc3Npb25faWQiOiI5ZTZmZWFlZS0yMzRlLTRiZDYtODRkOC0xZDg5NjNiNjdjMWIifQ.sJfE6D52SfGTrnJRZef_mPZV_SIeOTkUA5GqBbua18c
+2. Claiming attaches the site to your account and removes the Drop password.
+3. Site URL after claim: https://ephemeral-cuchufli-1036ac.netlify.app/
+
+Or authorize the CLI so future deploys are public:  
+https://app.netlify.com/authorize?response_type=ticket&ticket=9e70f7289223b6c209cafd070d9a051c
+
+### GitHub Pages (optional)
+
+A `gh-pages` branch with the built site is already pushed. Enable Pages in the repo settings → Pages → Source: `gh-pages` / root for a permanent public URL at `https://atomnucleus.github.io/sound3pO/`.
 
 ## Netlify config
 
