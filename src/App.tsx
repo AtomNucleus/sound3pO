@@ -513,6 +513,9 @@ function App() {
           }
         }}
       >
+        <div className="desk-grain" aria-hidden />
+        <div className="desk-bevel" aria-hidden />
+
         <header className="desk-header">
           <div className="brand-block">
             <p className="brand-mark">MOD DESK</p>
@@ -560,21 +563,45 @@ function App() {
             </span>
           </div>
 
-          {renderKnob({
-            id: 'master',
-            label: 'VOL',
-            value: params.masterVolume,
-            min: 0,
-            max: 1,
-            step: 0.01,
-            readout: formatPercent(params.masterVolume),
-            size: 'lg',
-            onChange: (value) => setParameter('masterVolume', value),
-          })}
+          <div className="header-master">
+            <div className="speaker-grille" aria-hidden>
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            {renderKnob({
+              id: 'master',
+              label: 'VOL',
+              value: params.masterVolume,
+              min: 0,
+              max: 1,
+              step: 0.01,
+              readout: formatPercent(params.masterVolume),
+              size: 'lg',
+              onChange: (value) => setParameter('masterVolume', value),
+            })}
+          </div>
         </header>
 
-        <div className="module-row">
+        <div className="module-bay">
+          <svg className="patch-cables" viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden>
+            <path className="cable cable-a" d="M120 40 C 220 110, 320 10, 420 55" />
+            <path className="cable cable-b" d="M480 50 C 560 100, 640 20, 740 60" />
+            <path className="cable cable-c" d="M780 45 C 850 95, 900 25, 960 70" />
+          </svg>
+
+          <div className="module-row">
           <article className="module osc">
+            <span className="screw tl" aria-hidden />
+            <span className="screw tr" aria-hidden />
+            <span className="screw bl" aria-hidden />
+            <span className="screw br" aria-hidden />
             <div className="module-head">
               <h2>OSC</h2>
               <div className="module-lcd">
@@ -678,6 +705,10 @@ function App() {
           </article>
 
           <article className="module filter">
+            <span className="screw tl" aria-hidden />
+            <span className="screw tr" aria-hidden />
+            <span className="screw bl" aria-hidden />
+            <span className="screw br" aria-hidden />
             <div className="module-head">
               <h2>FILTER</h2>
               <div className="module-lcd">
@@ -778,6 +809,10 @@ function App() {
           </article>
 
           <article className="module env">
+            <span className="screw tl" aria-hidden />
+            <span className="screw tr" aria-hidden />
+            <span className="screw bl" aria-hidden />
+            <span className="screw br" aria-hidden />
             <div className="module-head">
               <h2>ENV</h2>
               <div className="module-lcd">
@@ -851,6 +886,10 @@ function App() {
           </article>
 
           <article className="module delay">
+            <span className="screw tl" aria-hidden />
+            <span className="screw tr" aria-hidden />
+            <span className="screw bl" aria-hidden />
+            <span className="screw br" aria-hidden />
             <div className="module-head">
               <h2>DELAY</h2>
               <div className="module-lcd">
@@ -946,6 +985,7 @@ function App() {
               </button>
             </div>
           </article>
+        </div>
         </div>
 
         <div className="desk-bottom">
