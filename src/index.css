@@ -1,7 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap');
 
 :root {
-  --body-font: 'Space Grotesk', 'Avenir Next', 'Century Gothic', sans-serif;
+  --body-font: 'DM Sans', 'Avenir Next', 'Century Gothic', sans-serif;
+  --display-font: 'Syne', 'Avenir Next', sans-serif;
   --mono-font: 'IBM Plex Mono', 'JetBrains Mono', monospace;
   --lcd-font: 'IBM Plex Mono', 'JetBrains Mono', monospace;
 
@@ -26,22 +27,23 @@ body {
   margin: 0;
   min-height: 100svh;
   background:
-    radial-gradient(circle at 21% 19%, rgba(255, 237, 196, 0.66), transparent 44%),
-    radial-gradient(circle at 88% 0%, rgba(255, 222, 184, 0.42), transparent 38%),
-    linear-gradient(180deg, #f7eddc, #efe3cf 52%, #e6d7be);
-  padding: clamp(0.22rem, 1vw, 0.6rem);
+    radial-gradient(ellipse at 12% 0%, rgba(255, 236, 200, 0.7), transparent 42%),
+    radial-gradient(ellipse at 92% 8%, rgba(210, 230, 220, 0.35), transparent 38%),
+    radial-gradient(ellipse at 50% 100%, rgba(220, 190, 150, 0.25), transparent 45%),
+    linear-gradient(180deg, #f4ead8 0%, #e8d9c0 55%, #dcc9a8 100%);
+  padding: clamp(0.15rem, 0.8vw, 0.45rem);
 }
 
 #root {
   margin: 0 auto;
   width: 100%;
-  max-width: 1600px;
+  max-width: 1480px;
 }
 
 h1,
 h2,
 h3 {
-  font-family: var(--body-font);
+  font-family: var(--display-font);
   margin: 0;
 }
 

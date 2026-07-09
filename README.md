@@ -18,29 +18,27 @@ npm run preview
 
 ## What is included
 
-- **Image-as-chassis UI**
-  - The Mod Desk PNG is the full interface artwork
-  - Interactive overlays are positioned on top (knobs, buttons, LCDs, keys)
-  - Click **PLAY / POWER** first to resume audio
-- **Module controls mapped to the chassis art**:
-  - OSC (orange)
-  - FILTER (teal)
-  - ENV (yellow)
-  - DELAY (red)
-  - LFO, DIST, REVERB, OUTPUT
+- **Native modular desk UI**
+  - Real CSS modules (OSC / FILTER / ENV / DELAY) — not a static chassis image with hotspots
+  - Tactile knobs that rotate, ENV faders that slide, keys that depress
+  - Live LCD readouts per module
+  - Press **PLAY** first to resume audio
+- **Module controls**:
+  - OSC (orange) — engine, detune, mix, LFO/dist/reverb macros
+  - FILTER (teal) — cutoff, resonance, drive, type
+  - ENV (yellow) — ADSR faders + velocity
+  - DELAY (red) — time, feedback, mix, tone
+  - Macros, SCALE, GLIDE, HOLD / ARP
 - **Factory signal routing**: OSC → FILTER → DIST → DELAY → REVERB → MASTER
-- **Playable keyboard controls**
-  - On-screen piano overlays on the drawn keyboard
+- **Playable keyboard**
+  - On-screen piano with press feedback
   - Computer keyboard mapping (Z-M low row + Q-U upper row)
-  - Hold mode toggle and panic/all-notes-off
-- **Direct manipulation controls**
-  - Drag knobs up/down to morph parameters in real time
-  - Click keys to play notes
+  - Hold mode toggle and panic / all-notes-off
+- **Chord Field** — draggable chord nodes, progression loop, audio-reactive viz
 - **Web Audio synth engine**
   - AudioContext starts on first user gesture
   - Polyphonic voices
   - Filter, distortion, delay, reverb FX
-  - LFO and ENV modulation routes via patch cables
 
 ## Sound engines (OSC)
 
@@ -53,37 +51,6 @@ npm run preview
 7. Perc blip
 8. Choir / formant-ish
 
-## Live demo (no password)
+## Netlify
 
-**Public URL (no password):** https://sees-divide-summaries-barrier.trycloudflare.com/
-
-### Permanent Netlify (remove Drop password)
-
-Anonymous Netlify Drop deploys are password-gated until claimed. To publish on Netlify **without a password**:
-
-1. Open this claim link while signed into Netlify (expires ~1 hour):  
-   https://app.netlify.com/drop/ephemeral-cuchufli-1036ac#drop_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3ODM1NzM3NzgsImV4cCI6MTc4MzU3NzM3OCwiaXNzIjoiTmV0bGlmeSIsInNlc3Npb25faWQiOiI5ZTZmZWFlZS0yMzRlLTRiZDYtODRkOC0xZDg5NjNiNjdjMWIifQ.sJfE6D52SfGTrnJRZef_mPZV_SIeOTkUA5GqBbua18c
-2. Claiming attaches the site to your account and removes the Drop password.
-3. Site URL after claim: https://ephemeral-cuchufli-1036ac.netlify.app/
-
-Or authorize the CLI so future deploys are public:  
-https://app.netlify.com/authorize?response_type=ticket&ticket=9e70f7289223b6c209cafd070d9a051c
-
-### GitHub Pages (optional)
-
-A `gh-pages` branch with the built site is already pushed. Enable Pages in the repo settings → Pages → Source: `gh-pages` / root for a permanent public URL at `https://atomnucleus.github.io/sound3pO/`.
-
-## Netlify config
-
-`netlify.toml` is included with:
-
-- publish directory: `dist`
-- build command: `npm run build`
-- SPA fallback redirect to `index.html`
-
-Redeploy from this repo:
-
-```bash
-npm run build
-npx netlify-cli deploy --dir=dist --prod
-```
+`netlify.toml` publishes `dist` with SPA redirects.
