@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Orbitron:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+  --body-font: 'Space Grotesk', 'Avenir Next', 'Century Gothic', sans-serif;
+  --mono-font: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  --lcd-font: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+
+  font-family: var(--body-font);
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: #2e2620;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at 21% 19%, rgba(255, 237, 196, 0.66), transparent 44%),
+    radial-gradient(circle at 88% 0%, rgba(255, 222, 184, 0.42), transparent 38%),
+    linear-gradient(180deg, #f7eddc, #efe3cf 52%, #e6d7be);
+  padding: clamp(0.22rem, 1vw, 0.6rem);
+}
+
+#root {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1600px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--body-font);
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
