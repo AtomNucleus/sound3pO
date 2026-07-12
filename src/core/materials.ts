@@ -15,8 +15,8 @@ export const PALETTE = {
   yellow: '#F0D35A',
   lcdBg: '#0E1A14',
   lcdGreen: '#5CFF9A',
-  background: '#DDD8D0',
-  whiteKey: '#F5F2EC',
+  background: '#E4E0D8',
+  whiteKey: '#FFFEF9',
   blackKey: '#1C1C1A',
 } as const;
 
@@ -24,7 +24,24 @@ export const PALETTE = {
 export type ColorInput = THREE.ColorRepresentation;
 
 /**
- * Soft matte plastic — high roughness, slight clearcoat feel.
+ * Boost saturation/lightness so colors survive ACES Filmic tone mapping.
+ * Additive helper — does not change {@link PALETTE} constants.
+ */
+export function punchColor(color: ColorInput, sat = 1.2, light = 1.06): THREE.Color {
+  const c = new THREE.Color(color);
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  // Near-grays (chassis / keys): prefer lightness lift only
+  if (hsl.s < 0.08) {
+    c.setHSL(hsl.h, hsl.s, Math.min(0.97, hsl.l * light));
+    return c;
+  }
+  c.setHSL(hsl.h, Math.min(1, hsl.s * sat), Math.min(0.72, hsl.l * light));
+  return c;
+}
+
+/**
+ * Soft matte plastic — high roughness, essentially no clearcoat (product-photo plastic).
  * @param color - Base color
  * @param opts - Optional roughness / clearcoat overrides
  */
@@ -34,10 +51,10 @@ export function matte(
 ): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     color,
-    roughness: opts.roughness ?? 0.82,
-    metalness: opts.metalness ?? 0.02,
-    clearcoat: opts.clearcoat ?? 0.18,
-    clearcoatRoughness: opts.clearcoatRoughness ?? 0.55,
+    roughness: opts.roughness ?? 0.92,
+    metalness: opts.metalness ?? 0.0,
+    clearcoat: opts.clearcoat ?? 0.0,
+    clearcoatRoughness: opts.clearcoatRoughness ?? 1.0,
   });
 }
 
@@ -50,8 +67,8 @@ export function metal(
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color,
-    roughness: opts.roughness ?? 0.35,
-    metalness: opts.metalness ?? 0.85,
+    roughness: opts.roughness ?? 0.45,
+    metalness: opts.metalness ?? 0.7,
   });
 }
 

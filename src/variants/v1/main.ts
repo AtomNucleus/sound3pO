@@ -4,7 +4,6 @@
  */
 import * as THREE from 'three';
 import { createStage } from '../../core/scene';
-import { PALETTE } from '../../core/materials';
 import { buildDevice } from '../../core/device';
 import { CableManager } from '../../core/cables';
 import { SynthEngine, type SynthParam, type Waveform } from '../../core/audio';
@@ -18,39 +17,65 @@ if (!container) throw new Error('#app missing');
 const hintEl = document.getElementById('hint');
 const powerEl = document.getElementById('power') as HTMLButtonElement | null;
 
+/**
+ * Product-shot framing: ~34° elevation, full device in frame including
+ * logo + red cable arc; top panel reads as a chunky landscape rectangle.
+ */
+function productCamera(aspect: number): { position: THREE.Vector3; lookAt: THREE.Vector3; fov: number } {
+  const pull = aspect < 1.15 ? 1.18 : aspect < 1.4 ? 1.06 : 1.0;
+  return {
+    // ~35° elevation, framed so logo + red arc + keyboard all fit with modest margins
+    position: new THREE.Vector3(0.1 * pull, 3.6 * pull, 5.1 * pull),
+    lookAt: new THREE.Vector3(0.05, 0.02, 0.02),
+    fov: aspect < 1.15 ? 33 : 28,
+  };
+}
+
+const initialAspect = container.clientWidth / Math.max(container.clientHeight, 1);
+const cam = productCamera(initialAspect);
+
 const stage = createStage(container, {
   cameraMode: 'fixed',
-  background: PALETTE.background,
-  // Slight top-down front angle (~30°), device fills frame
-  cameraPosition: new THREE.Vector3(0.15, 3.15, 4.35),
-  lookAt: new THREE.Vector3(0.05, 0.05, 0.05),
-  fov: 30,
+  background: '#DDD8D0',
+  cameraPosition: cam.position,
+  lookAt: cam.lookAt,
+  fov: cam.fov,
   contactShadow: true,
   lighting: true,
 });
 
-const device = buildDevice({ tilt: 0.3 });
+const device = buildDevice({ tilt: 0.22, scale: 1.08 });
 stage.scene.add(device.root);
+device.root.updateMatrixWorld(true);
 
-// Screens
+const shadow = stage.scene.getObjectByName('contactShadow');
+if (shadow) {
+  shadow.position.y = -0.5;
+  shadow.scale.setScalar(1.15);
+}
+
+// Screens — visible without power (static grid / caption)
 const synth = new SynthEngine();
-// Warm default patch — analyser available before resume
 const analyser = synth.getAnalyser();
 const scope = makeScopeScreen(analyser, { caption: 'MOD DESK' });
 const params = makeParamScreen({ analyser, caption: 'PATCH' });
+params.setParam('cutoff', 0.65);
+params.setNote('—');
 
 const applyScreenMap = (mesh: THREE.Mesh, texture: THREE.CanvasTexture): void => {
   const mat = mesh.material as THREE.MeshStandardMaterial;
   mat.map = texture;
   mat.emissiveMap = texture;
   mat.emissive = new THREE.Color(0xffffff);
-  mat.emissiveIntensity = 0.55;
+  mat.emissiveIntensity = 0.85;
   mat.needsUpdate = true;
 };
 applyScreenMap(device.screens.screenA, scope.texture);
 applyScreenMap(device.screens.screenB, params.texture);
+// Paint once immediately so LCDs aren't blank before first frame
+scope.update(0);
+params.update(0);
 
-// Default knob → synth values
 synth.setParam('cutoff', device.getKnob('filter-cutoff')?.value ?? 0.65);
 synth.setParam('resonance', device.getKnob('filter-res')?.value ?? 0.2);
 synth.setParam('delayTime', device.getKnob('fx-delay')?.value ?? 0.25);
@@ -75,20 +100,25 @@ const jack = (id: string) => {
 };
 
 cables.create(stage.scene, {
-  color: PALETTE.cableRed,
+  color: '#E23B2E',
   from: jack('top-jack-l'),
   to: jack('top-jack-r'),
-  slack: 0.55,
+  slack: 0.35,
+  radius: 0.03,
+  arcHeight: 0.85,
+  segments: 32,
 });
 
 cables.create(stage.scene, {
-  color: PALETTE.teal,
+  color: '#3BA8A0',
   from: jack('osc-out'),
   to: jack('filter-in'),
-  slack: 0.4,
+  slack: 0.3,
+  radius: 0.02,
+  arcHeight: 0.32,
+  segments: 24,
 });
 
-// Knob → param mapping
 const KNOB_MAP: Record<string, SynthParam> = {
   'osc-tune': 'tune',
   'osc-level': 'volume',
@@ -188,7 +218,6 @@ const kb = new KeyboardInput({ baseMidi: 60 });
 kb.on('noteOn', ({ midi }) => {
   hideHint();
   if (!powered) void powerOn();
-  // Visual key press if matching
   const key = device.keys.find((k) => k.midi === midi);
   key?.press();
   synth.noteOn(midi);
@@ -209,7 +238,19 @@ const grilleRoot =
   (device.speakerGrille.userData.grilleRoot as THREE.Object3D | undefined) ?? device.speakerGrille;
 const grilleBaseScale = grilleRoot.scale.clone();
 
-stage.addResizeHandler();
+const disposeResize = stage.addResizeHandler();
+void disposeResize;
+// Re-frame on resize so square and wide viewports both work
+const onResizeFrame = (): void => {
+  const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+  const next = productCamera(aspect);
+  stage.camera.fov = next.fov;
+  stage.camera.position.copy(next.position);
+  stage.camera.lookAt(next.lookAt);
+  stage.camera.updateProjectionMatrix();
+};
+window.addEventListener('resize', onResizeFrame);
+
 stage.onFrame((_t, dt) => {
   cables.update(dt);
   scope.update(dt);

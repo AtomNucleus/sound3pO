@@ -58,32 +58,40 @@ export function addStudioLighting(scene: THREE.Scene, intensity = 1): THREE.Grou
   const group = new THREE.Group();
   group.name = 'studioLighting';
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.35 * intensity);
+  // Soft ambient base so cream reads bright/warm
+  const ambient = new THREE.AmbientLight(0xfff8f0, 0.55 * intensity);
   group.add(ambient);
 
-  const key = new THREE.DirectionalLight(0xfff5ea, 1.15 * intensity);
-  key.position.set(-3.2, 5.5, 3.5);
-  key.castShadow = true;
+  // Soft key from upper-left-front (product photo)
+  // Shadow casting off by default — deck micro-geometry shadows read as "floating".
+  // Variants that want contact shadows on the ground can enable key.castShadow.
+  const key = new THREE.DirectionalLight(0xfff3e4, 1.85 * intensity);
+  key.position.set(-2.8, 5.2, 4.2);
+  key.castShadow = false;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 0.5;
-  key.shadow.camera.far = 20;
-  key.shadow.camera.left = -6;
-  key.shadow.camera.right = 6;
-  key.shadow.camera.top = 6;
-  key.shadow.camera.bottom = -6;
-  key.shadow.bias = -0.0002;
-  key.shadow.radius = 3;
+  key.shadow.camera.far = 22;
+  key.shadow.camera.left = -7;
+  key.shadow.camera.right = 7;
+  key.shadow.camera.top = 7;
+  key.shadow.camera.bottom = -7;
+  key.shadow.bias = -0.00025;
+  key.shadow.normalBias = 0.02;
+  key.shadow.radius = 4.5;
   group.add(key);
 
-  const fill = new THREE.DirectionalLight(0xe8eef8, 0.45 * intensity);
-  fill.position.set(4, 2.5, 2);
+  // Warm soft fill from the right
+  const fill = new THREE.DirectionalLight(0xf0f4ff, 0.7 * intensity);
+  fill.position.set(4.5, 3.2, 2.5);
   group.add(fill);
 
-  const rim = new THREE.DirectionalLight(0xffffff, 0.35 * intensity);
-  rim.position.set(0.5, 3, -4);
+  // Subtle rim from behind
+  const rim = new THREE.DirectionalLight(0xffffff, 0.45 * intensity);
+  rim.position.set(0.2, 4.0, -4.5);
   group.add(rim);
 
-  const hemi = new THREE.HemisphereLight(0xf5f2ec, 0xc8c2b8, 0.4 * intensity);
+  // Large soft sky / ground bounce
+  const hemi = new THREE.HemisphereLight(0xfffaf4, 0xd4cfc4, 0.65 * intensity);
   group.add(hemi);
 
   scene.add(group);
@@ -119,7 +127,7 @@ export function addContactShadow(
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = opts.y ?? -0.42;
+  mesh.position.y = opts.y ?? -0.48;
   mesh.name = 'contactShadow';
   mesh.receiveShadow = false;
   scene.add(mesh);
@@ -162,7 +170,7 @@ export function createStage(container: HTMLElement, options: StageOptions = {}):
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.28;
   renderer.shadowMap.enabled = shadows;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);

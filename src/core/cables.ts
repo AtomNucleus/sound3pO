@@ -14,8 +14,13 @@ export interface PatchCableOptions {
   slack?: number;
   /** Verlet particle count. Default 24. */
   segments?: number;
-  /** Cable tube radius. Default 0.018. */
+  /** Cable tube radius. Default 0.028. */
   radius?: number;
+  /**
+   * Peak arc height above the endpoints (world units).
+   * Default = max(0.35, distance * 0.55).
+   */
+  arcHeight?: number;
 }
 
 /** Opaque grab token from {@link PatchCable.grabNearest}. */
@@ -49,6 +54,7 @@ export class PatchCable {
   readonly segmentCount: number;
   private particles: THREE.Vector3[] = [];
   private prev: THREE.Vector3[] = [];
+  private restPose: THREE.Vector3[] = [];
   private restLength = 0.05;
   private slack: number;
   private radius: number;
@@ -60,21 +66,30 @@ export class PatchCable {
   private plugB: THREE.Mesh;
   private material: THREE.MeshPhysicalMaterial;
   private plugMat: THREE.MeshStandardMaterial;
-  private gravity = new THREE.Vector3(0, -4.5, 0);
-  private damping = 0.97;
+  /** Mild gravity — rest-pose spring holds the signature arc above the deck. */
+  private gravity = new THREE.Vector3(0, -1.2, 0);
+  private damping = 0.96;
+  private poseSpring = 0.28;
   private grabIndex: number | null = null;
   private readonly grabPos = new THREE.Vector3();
   private disposed = false;
   private readonly posA = new THREE.Vector3();
   private readonly posB = new THREE.Vector3();
+  private arcHeight: number;
 
   constructor(scene: THREE.Scene, opts: PatchCableOptions) {
     this.color = new THREE.Color(opts.color ?? PALETTE.cableRed);
+    // Keep cable hues vivid under ACES (avoid washed peach)
+    const hsl = { h: 0, s: 0, l: 0 };
+    this.color.getHSL(hsl);
+    this.color.setHSL(hsl.h, Math.min(1, Math.max(0.85, hsl.s * 1.15)), Math.min(0.48, Math.max(0.35, hsl.l)));
+
     this.from = opts.from;
     this.to = opts.to;
-    this.slack = opts.slack ?? 0.35;
+    this.slack = opts.slack ?? 0.55;
     this.segmentCount = opts.segments ?? 24;
-    this.radius = opts.radius ?? 0.018;
+    this.radius = opts.radius ?? 0.03;
+    this.arcHeight = opts.arcHeight ?? -1;
 
     if (!(opts.from instanceof THREE.Vector3)) this.attached[0] = opts.from;
     if (!(opts.to instanceof THREE.Vector3)) this.attached[1] = opts.to;
@@ -84,21 +99,27 @@ export class PatchCable {
     this.group.userData.cable = this;
     scene.add(this.group);
 
+    // Saturated rubber — mild emissive so red survives ACES without going pink
     this.material = new THREE.MeshPhysicalMaterial({
       color: this.color,
-      roughness: 0.55,
-      metalness: 0.05,
-      clearcoat: 0.35,
+      roughness: 0.75,
+      metalness: 0.0,
+      clearcoat: 0.15,
+      clearcoatRoughness: 0.6,
+      emissive: this.color.clone().multiplyScalar(0.35),
+      emissiveIntensity: 0.35,
     });
     this.plugMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a28,
-      metalness: 0.7,
-      roughness: 0.35,
+      color: 0x1a1a18,
+      metalness: 0.65,
+      roughness: 0.4,
     });
 
-    const plugGeo = new THREE.CylinderGeometry(this.radius * 1.6, this.radius * 1.2, 0.08, 12);
+    const plugGeo = new THREE.CylinderGeometry(this.radius * 1.55, this.radius * 1.15, 0.1, 14);
     this.plugA = new THREE.Mesh(plugGeo, this.plugMat);
     this.plugB = new THREE.Mesh(plugGeo.clone(), this.plugMat);
+    this.plugA.castShadow = true;
+    this.plugB.castShadow = true;
     this.plugA.userData.cableEnd = { cable: this, endIndex: 0 as const };
     this.plugB.userData.cableEnd = { cable: this, endIndex: 1 as const };
     this.group.add(this.plugA, this.plugB);
@@ -108,19 +129,40 @@ export class PatchCable {
   }
 
   private initParticles(): void {
+    if (!(this.from instanceof THREE.Vector3)) {
+      this.from.mesh.updateWorldMatrix(true, false);
+    }
+    if (!(this.to instanceof THREE.Vector3)) {
+      this.to.mesh.updateWorldMatrix(true, false);
+    }
     resolvePos(this.from, this.posA);
     resolvePos(this.to, this.posB);
-    const dist = Math.max(this.posA.distanceTo(this.posB), 0.2);
-    const total = dist * (1 + this.slack);
+    const dist = Math.max(this.posA.distanceTo(this.posB), 0.25);
+    const height = this.arcHeight > 0 ? this.arcHeight : Math.max(0.45, dist * 0.85);
+    this.arcHeight = height;
+    const total = Math.max(dist * (1 + this.slack), dist + height * 1.4);
     this.restLength = total / (this.segmentCount - 1);
     this.particles = [];
     this.prev = [];
+    this.restPose = [];
     for (let i = 0; i < this.segmentCount; i++) {
       const t = i / (this.segmentCount - 1);
       const p = new THREE.Vector3().lerpVectors(this.posA, this.posB, t);
-      p.y += Math.sin(t * Math.PI) * dist * 0.35;
+      // Tall sine arc above the deck (product-photo signature)
+      p.y += Math.sin(t * Math.PI) * height;
       this.particles.push(p);
       this.prev.push(p.clone());
+      this.restPose.push(p.clone());
+    }
+  }
+
+  /** Rebuild arched rest pose between current endpoints (keeps signature arc). */
+  private refreshRestPose(): void {
+    for (let i = 0; i < this.segmentCount; i++) {
+      const t = i / (this.segmentCount - 1);
+      const p = this.restPose[i]!;
+      p.lerpVectors(this.posA, this.posB, t);
+      p.y += Math.sin(t * Math.PI) * this.arcHeight;
     }
   }
 
@@ -138,6 +180,7 @@ export class PatchCable {
     const h = Math.min(dt, 0.033);
     resolvePos(this.from, this.posA);
     resolvePos(this.to, this.posB);
+    this.refreshRestPose();
 
     if (this.grabIndex !== 0) {
       this.particles[0]!.copy(this.posA);
@@ -153,6 +196,20 @@ export class PatchCable {
       this.prev[this.grabIndex]!.copy(this.grabPos);
     }
 
+    // Idle: lerp to arched rest pose (smooth product-photo cable).
+    // Grabbed: verlet + stretch for elastic feel.
+    if (this.grabIndex == null) {
+      for (let i = 1; i < this.segmentCount - 1; i++) {
+        this.particles[i]!.lerp(this.restPose[i]!, 0.5);
+        this.prev[i]!.copy(this.particles[i]!);
+      }
+      this.particles[0]!.copy(this.posA);
+      this.particles[this.segmentCount - 1]!.copy(this.posB);
+      this.rebuildTube();
+      this.updatePlugs();
+      return;
+    }
+
     const substeps = 3;
     const step = h / substeps;
     for (let s = 0; s < substeps; s++) {
@@ -160,13 +217,15 @@ export class PatchCable {
         if (i === this.grabIndex) continue;
         const p = this.particles[i]!;
         const pr = this.prev[i]!;
+        const pose = this.restPose[i]!;
         const vx = (p.x - pr.x) * this.damping;
         const vy = (p.y - pr.y) * this.damping;
         const vz = (p.z - pr.z) * this.damping;
         pr.copy(p);
-        p.x += vx + this.gravity.x * step * step;
-        p.y += vy + this.gravity.y * step * step;
-        p.z += vz + this.gravity.z * step * step;
+        const spring = this.poseSpring * 0.35;
+        p.x += vx + this.gravity.x * step * step + (pose.x - p.x) * spring;
+        p.y += vy + this.gravity.y * step * step + (pose.y - p.y) * spring;
+        p.z += vz + this.gravity.z * step * step + (pose.z - p.z) * spring;
       }
 
       for (let iter = 0; iter < 4; iter++) {
@@ -177,12 +236,7 @@ export class PatchCable {
           const d = _dir.length();
           if (d < 1e-6) continue;
           const maxLen = this.restLength * MAX_STRETCH;
-          const desired =
-            this.grabIndex != null
-              ? THREE.MathUtils.clamp(d > maxLen ? maxLen : this.restLength, this.restLength * 0.5, maxLen)
-              : this.restLength;
-          // When grabbing, pull toward restLength but allow stretch up to maxLen
-          const targetLen = this.grabIndex != null ? Math.min(Math.max(d, this.restLength), maxLen) : desired;
+          const targetLen = Math.min(Math.max(d, this.restLength * 0.85), maxLen);
           const corr = ((d - targetLen) / d) * 0.5;
           const aPinned = i === 0 || i === this.grabIndex;
           const bPinned = i + 1 === this.segmentCount - 1 || i + 1 === this.grabIndex;
@@ -208,7 +262,7 @@ export class PatchCable {
         if (this.grabIndex !== this.segmentCount - 1) {
           this.particles[this.segmentCount - 1]!.copy(this.posB);
         }
-        if (this.grabIndex != null) this.particles[this.grabIndex]!.copy(this.grabPos);
+        this.particles[this.grabIndex]!.copy(this.grabPos);
       }
     }
 
@@ -218,13 +272,14 @@ export class PatchCable {
 
   private rebuildTube(): void {
     const curve = new THREE.CatmullRomCurve3(this.particles);
-    const geo = new THREE.TubeGeometry(curve, this.segmentCount * 2, this.radius, 8, false);
+    const geo = new THREE.TubeGeometry(curve, Math.max(48, this.segmentCount * 3), this.radius, 10, false);
     if (this.tubeMesh) {
       this.tubeMesh.geometry.dispose();
       this.tubeMesh.geometry = geo;
     } else {
       this.tubeMesh = new THREE.Mesh(geo, this.material);
       this.tubeMesh.castShadow = true;
+      this.tubeMesh.receiveShadow = false;
       this.tubeMesh.userData.cable = this;
       this.group.add(this.tubeMesh);
     }
