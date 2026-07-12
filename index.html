@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MOD DESK — three.js variations</title>
+    <style>
+      :root {
+        --cream: #efeae2;
+        --ink: #2a2a28;
+        --muted: #6b6760;
+        --teal: #3ba8a0;
+        --line: rgba(42, 42, 40, 0.12);
+      }
+      * { box-sizing: border-box; margin: 0; }
+      html, body {
+        min-height: 100%;
+        background:
+          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(59, 168, 160, 0.12), transparent),
+          radial-gradient(ellipse 60% 40% at 90% 10%, rgba(232, 118, 44, 0.1), transparent),
+          var(--cream);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+      .page { max-width: 960px; margin: 0 auto; padding: 3.5rem 1.5rem 4rem; }
+      .hero { margin-bottom: 2.75rem; }
+      .eyebrow {
+        font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--muted); margin-bottom: 0.75rem;
+      }
+      h1 {
+        font-size: clamp(2.6rem, 6vw, 4rem); font-weight: 800;
+        letter-spacing: -0.03em; line-height: 1; margin-bottom: 0.75rem;
+      }
+      .sub { font-size: 1.05rem; color: var(--muted); max-width: 28rem; line-height: 1.45; }
+      .grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem;
+      }
+      .card {
+        display: flex; flex-direction: column; text-decoration: none; color: inherit;
+        background: rgba(255, 255, 255, 0.45); border: 1px solid var(--line);
+        border-radius: 14px; overflow: hidden;
+        transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 14px 32px rgba(42, 42, 40, 0.1);
+        border-color: rgba(42, 42, 40, 0.22);
+      }
+      .swatches { display: flex; height: 10px; }
+      .swatches span { flex: 1; }
+      .meta { padding: 1.15rem 1.2rem 1.3rem; }
+      .code {
+        display: inline-block; font-size: 0.7rem; font-weight: 700;
+        letter-spacing: 0.12em; color: var(--teal); margin-bottom: 0.35rem;
+      }
+      .meta h2 {
+        font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.4rem;
+      }
+      .meta p { font-size: 0.9rem; line-height: 1.45; color: var(--muted); }
+      .foot { margin-top: 2.5rem; font-size: 0.8rem; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/landing/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MOD DESK — V1 Product Shot</title>
+    <style>
+      * { margin: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #DDD8D0; }
+      #app { width: 100%; height: 100%; }
+      canvas { display: block; }
+      .overlay {
+        position: fixed; inset: 0; pointer-events: none;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #2A2A28;
+      }
+      .hint {
+        position: absolute; left: 1.25rem; bottom: 1.25rem;
+        font-size: 0.8rem; letter-spacing: 0.02em; opacity: 0.7;
+        transition: opacity 0.8s ease;
+      }
+      .hint.hidden { opacity: 0; }
+      .back {
+        position: absolute; left: 1.25rem; top: 1.25rem;
+        pointer-events: auto; text-decoration: none; color: #2A2A28;
+        font-size: 0.85rem; opacity: 0.65;
+      }
+      .back:hover { opacity: 1; }
+      .power {
+        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        pointer-events: auto; border: none; cursor: pointer;
+        background: #2A2A28; color: #EFEAE2; padding: 0.65rem 1.1rem;
+        border-radius: 999px; font-size: 0.8rem; letter-spacing: 0.04em;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        transition: opacity 0.4s ease, transform 0.2s ease;
+      }
+      .power:hover { transform: translate(-50%, -50%) scale(1.03); }
+      .power.off { opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="overlay">
+      <a class="back" href="/index.html">← all variants</a>
+      <p class="hint" id="hint">drag knobs · play keys (A–K) · pull the cables</p>
+      <button class="power" id="power" type="button">tap to power on</button>
+    </div>
+    <script type="module" src="/src/variants/v1/main.ts"></script>
+  </body>
+</html>
